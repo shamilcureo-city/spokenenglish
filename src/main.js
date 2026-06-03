@@ -28,6 +28,12 @@ import {
   moderateLearnerText,
   summarizeQualityEvents,
 } from './domain/quality.js';
+import {
+  createAnalyticsEvent,
+  createBetaReadinessChecklist,
+  createPilotExport,
+  summarizeLearnerAnalytics,
+} from './domain/analytics.js';
 import { defaultReminder, getReminderMessage, reminderOptions } from './domain/retention.js';
 import { createNotebookEntry, correctionModes, practiceNotebookEntry, summarizeMistakeNotebook } from './domain/correction.js';
 import { createSavedReport, generateSessionReport, generateWeeklyProgress } from './domain/report.js';
@@ -83,6 +89,7 @@ const state = {
   upgradePrompt: saved.upgradePrompt ?? '',
   qualityEvents: saved.qualityEvents ?? [],
   safetyEvents: saved.safetyEvents ?? [],
+  analyticsEvents: saved.analyticsEvents ?? [],
 };
 
 const persist = () => saveAppState(state);
@@ -123,6 +130,10 @@ const activePlan = () => getPlanByName(state.profile.plan);
 const remainingMinutes = () => getRemainingMinutes(state.profile.plan, state.usage);
 const hasEnoughMinutesForSession = () => canUseMinutes(state.profile.plan, state.usage, getLessonTotalMinutes(activeLesson()));
 const qualitySummary = () => summarizeQualityEvents(state.qualityEvents);
+const analyticsSummary = () => summarizeLearnerAnalytics(state);
+const trackAnalytics = (name, properties = {}) => {
+  state.analyticsEvents = [createAnalyticsEvent(name, properties), ...state.analyticsEvents].slice(0, 50);
+};
 
 let activeRecognizer = null;
 
@@ -164,6 +175,7 @@ const renderTabs = () => `
     ${buttonTab('reports', 'Reports')}
     ${buttonTab('plans', 'Plans')}
     ${buttonTab('privacy', 'Privacy')}
+    ${buttonTab('analytics', 'Analytics')}
     ${buttonTab('b2b', 'B2B')}
   </nav>
 `;
@@ -400,6 +412,50 @@ const renderPrivacyTab = () => {
   `;
 };
 
+const renderAnalyticsTab = () => {
+  const summary = analyticsSummary();
+  const checklist = createBetaReadinessChecklist(summary);
+  const exportPayload = createPilotExport({ profile: state.profile, analyticsSummary: summary });
+
+  return `
+    <section class="grid two-columns">
+      <div class="panel stack">
+        <div class="section-title"><span>📊</span><div><h2>Beta analytics cockpit</h2><p>Sprint 10 local analytics for activation, engagement, quality, and pilot export readiness.</p></div></div>
+        <div class="score-grid compact">
+          <div class="score highlight"><span>Activation</span><strong>${summary.activationScore}%</strong></div>
+          <div class="score"><span>Learner turns</span><strong>${summary.engagement.learnerTurns}</strong></div>
+          <div class="score"><span>Reports</span><strong>${summary.engagement.savedReports}</strong></div>
+          <div class="score"><span>Used minutes</span><strong>${summary.engagement.usedMinutes}</strong></div>
+          <div class="score"><span>Safety events</span><strong>${summary.quality.safetyEvents}</strong></div>
+        </div>
+        <div class="history-list">
+          <h3>Activation funnel</h3>
+          ${summary.funnel.map((step) => `
+            <article class="history-card"><strong>${step.complete ? '✅' : '⬜'} ${escapeHtml(step.label)}</strong><span>${step.complete ? 'complete' : 'pending'}</span></article>
+          `).join('')}
+        </div>
+        <div class="history-list">
+          <h3>Beta alerts</h3>
+          ${summary.alerts.map((alert) => `<article class="history-card"><strong>Alert</strong><p>${escapeHtml(alert)}</p></article>`).join('')}
+        </div>
+        <div class="history-list">
+          <h3>Recent analytics events</h3>
+          ${state.analyticsEvents.length === 0 ? '<p class="empty">No analytics events yet.</p>' : state.analyticsEvents.slice(0, 8).map((event) => `
+            <article class="history-card"><strong>${escapeHtml(event.name)}</strong><span>${escapeHtml(new Date(event.createdAt).toLocaleString('en-IN'))}</span><p>${escapeHtml(JSON.stringify(event.properties))}</p></article>
+          `).join('')}
+        </div>
+      </div>
+      <div class="panel stack">
+        <div class="section-title"><span>🚦</span><div><h2>Readiness checklist</h2><p>What must be healthy before a closed beta cohort.</p></div></div>
+        ${checklist.map((item) => `
+          <article class="history-card"><strong>${item.status === 'ready' ? 'Ready' : 'Needs work'}</strong><p>${escapeHtml(item.item)}</p></article>
+        `).join('')}
+        <label>Pilot export JSON<textarea readonly>${escapeHtml(JSON.stringify(exportPayload, null, 2))}</textarea></label>
+      </div>
+    </section>
+  `;
+};
+
 const renderB2BTab = () => `
   <section class="panel stack">
     <div class="section-title"><span>🏫</span><div><h2>B2B pilot dashboard</h2><p>Institution view for Sprint 12 pilot planning.</p></div></div>
@@ -421,6 +477,7 @@ const renderActiveTab = () => ({
   reports: renderReportsTab,
   plans: renderPlansTab,
   privacy: renderPrivacyTab,
+  analytics: renderAnalyticsTab,
   b2b: renderB2BTab,
 }[state.activeTab] ?? renderLearnTab)();
 
@@ -463,6 +520,7 @@ const startOrResumeSession = () => {
   }
 
   const runtime = ensureSessionRuntime();
+  trackAnalytics('session_started', { lessonId: activeLesson().id });
   state.currentPhase = runtime.currentPhase;
   state.activeTab = 'session';
   state.transcript = state.transcript.length ? state.transcript : [
@@ -498,6 +556,7 @@ const sendLearnerTurn = () => {
     };
     const safeAiTurn = createTurn('ai', state.currentPhase, 'Let us keep this practice safe and respectful. If you feel unsafe, please contact a trusted person or local emergency support. We can continue with a calmer English sentence.');
     state.safetyEvents = [safetyEvent, ...state.safetyEvents].slice(0, 20);
+    trackAnalytics('moderation_blocked', { category: moderation.category });
     state.qualityEvents = [createQualityEvent({ kind: 'moderation', status: 'blocked', detail: moderation.category }), ...state.qualityEvents].slice(0, 30);
     state.transcript = [...state.transcript, learnerTurn, safeAiTurn];
     state.learnerInput = '';
@@ -505,6 +564,8 @@ const sendLearnerTurn = () => {
     render();
     return;
   }
+
+  trackAnalytics('learner_turn_sent', { lessonId: activeLesson().id, phase: state.currentPhase, correctionMode: state.correctionMode });
 
   const startedAt = performance.now();
   const tutorResponse = getMockTutorResponse(learnerTurn, state.profile.supportLanguage, state.correctionMode);
@@ -537,6 +598,7 @@ const advancePhase = () => {
   state.sessionRuntime.completedPhases = [...new Set([...state.sessionRuntime.completedPhases, state.currentPhase])];
   state.currentPhase = nextPhase();
   state.sessionRuntime.currentPhase = state.currentPhase;
+  trackAnalytics('phase_advanced', { lessonId: activeLesson().id, phase: state.currentPhase });
   const nextStep = activeLesson().steps.find((step) => step.phase === state.currentPhase);
   state.transcript = [
     ...state.transcript,
@@ -548,11 +610,13 @@ const advancePhase = () => {
 
 const saveReport = () => {
   const report = generateSessionReport(activeLesson().title, state.transcript, state.corrections);
-  state.reports = [createSavedReport({
+  const savedReport = createSavedReport({
     report,
     lessonId: state.activeLessonId,
     correctionMode: state.correctionMode,
-  }), ...state.reports].slice(0, 10);
+  });
+  state.reports = [savedReport, ...state.reports].slice(0, 10);
+  trackAnalytics('report_saved', { lessonId: activeLesson().id, score: savedReport.overallScore });
   const completedAt = new Date();
   state.profile.streak = calculateStreak(state.profile.streak, state.lastCompletedAt, completedAt);
   state.lastCompletedAt = completedAt.toISOString();
@@ -615,6 +679,7 @@ const startVoiceCapture = () => {
   if (!state.voice.capability.speechRecognition) {
     state.voice.status = 'typed-fallback';
     state.voice.lastError = 'Speech recognition is unavailable in this browser. Use typed practice or connect Gemini Live in the backend.';
+    trackAnalytics('voice_fallback', { speechRecognition: false });
     state.qualityEvents = [createQualityEvent({ kind: 'voice', status: 'fallback', detail: 'Speech recognition unavailable' }), ...state.qualityEvents].slice(0, 30);
     persist();
     render();
@@ -679,6 +744,7 @@ const applyPrivacyRetention = () => {
   state.corrections = retained.corrections;
   state.reports = retained.reports;
   state.qualityEvents = [createQualityEvent({ kind: 'privacy', detail: 'Retention policy applied' }), ...state.qualityEvents].slice(0, 30);
+  trackAnalytics('retention_applied', { retentionDays: Number(state.privacy.retentionDays ?? 30), saveTranscript: state.privacy.saveTranscript });
   persist();
   render();
 };
@@ -715,6 +781,7 @@ const bindEvents = () => {
     const checkout = completeCheckout(state.profile.plan, event.currentTarget.dataset.plan);
     state.profile.plan = checkout.planName;
     state.billingEvents = [checkout.event, ...state.billingEvents].slice(0, 12);
+    trackAnalytics('checkout_simulated', { planName: checkout.planName, status: checkout.event.status });
     state.upgradePrompt = checkout.event.status === 'payment_success'
       ? `${checkout.planName} activated. You now have ${getPlanByName(checkout.planName).dailyMinutes} minutes per day.`
       : `${checkout.planName} is already active.`;

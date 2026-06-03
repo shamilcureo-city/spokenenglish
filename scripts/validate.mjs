@@ -4,6 +4,7 @@ const requiredFiles = [
   'index.html',
   'src/main.js',
   'src/styles.css',
+  'src/domain/analytics.js',
   'src/domain/course.js',
   'src/domain/correction.js',
   'src/domain/localization.js',

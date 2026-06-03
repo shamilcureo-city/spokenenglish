@@ -13,8 +13,8 @@ SpeakSaathi is an India-first AI spoken-English coach prototype. It demonstrates
 - Correction modes for gentle, real-time, and fluency practice, plus a repeatable mistake notebook.
 - Mock AI tutor service that models gentle correction behavior and mother-tongue explanations.
 - Report engine that generates overall score, talk time, score breakdowns, strengths, corrections, pronunciation focus, vocabulary, homework, weekly progress, and saved report history from transcript events.
-- Prototype subscription plan screen with local checkout simulation, daily minute entitlements, usage tracking, billing events, privacy/safety controls, quality metrics, cost estimates, retention policy, and B2B cohort dashboard.
-- Node test coverage for course setup and report generation.
+- Prototype subscription plan screen with local checkout simulation, daily minute entitlements, usage tracking, billing events, privacy/safety controls, quality metrics, cost estimates, retention policy, beta analytics cockpit, pilot export, and B2B cohort dashboard.
+- Node test coverage for analytics, course setup, correction flows, quality, subscriptions, voice support, and report generation.
 
 ## Run locally
 

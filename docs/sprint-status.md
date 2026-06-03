@@ -15,6 +15,7 @@ This repository now implements a browser-based MVP foundation across the planned
 | Sprint 7: Localization | Localized support copy, native language profiles, code-mixed examples, and India-first scenario prompts for five MVP languages; full UI translation QA remains pending. |
 | Sprint 8: Payments | Pricing UI, local checkout simulation, daily minute entitlements, upgrade prompts, usage tracking, and billing events; real payment gateway remains pending. |
 | Sprint 9: Safety and privacy | Local privacy controls, safety moderation events, quality/latency/cost dashboard, retention policy, fallback tracking, and delete-local-data action; production privacy workflows remain pending. |
+| Sprint 10: Analytics and beta readiness | Local activation funnel, engagement metrics, beta alerts, readiness checklist, analytics event log, and privacy-safe pilot export; production analytics warehouse, load testing, and closed-beta operations remain pending. |
 | Sprint 12: B2B pilot | Demo cohort dashboard with learners, completion, speaking minutes, and weak areas. |
 
 ## Still pending for production
