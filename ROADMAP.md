@@ -35,7 +35,7 @@ Status against the approved 5-phase plan. ✅ = done · 🔲 = pending.
 ## Phase 3 — Regional-language correction depth  *(in progress)*
 
 - ✅ **3A — KB breadth:** all five languages (Hindi, Tamil, Telugu, Kannada, Malayalam) — 29 transfer rules with **native-script** explanations; surfaced on the map's "patterns" card. 🔲 remaining: native-speaker linguistic QA pass.
-- 🔲 **3B — Pronunciation:** phoneme detectors wired into `score-session`; phonetic-transfer feedback.
+- ◑ **3B — Pronunciation:** ✅ **Sounds** practice mode — 12 minimal-pair phoneme drills (`phonemes.ts`) tied to the `ph.*` skills, with mother-tongue tips (native script), graded onto FSRS; activates the 20-skill pronunciation family. 🔲 remaining: live phoneme scoring from audio in `score-session`.
 - ◑ **3C — Surfaces:** ✅ L1-insight cards (native script) + **spaced-repetition review drills** (Again/Hard/Good/Easy → FSRS reschedule, with the mother-tongue "why"). 🔲 remaining: full mother-tongue UI rendering + code-mix handling.
 
 ---

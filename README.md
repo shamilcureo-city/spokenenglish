@@ -36,7 +36,7 @@ The whole point of the architecture: the science is written **once** in `package
 - **Preserved Gemini configuration**, frozen and guarded by a test: `GEMINI_SETUP` (model `gemini-2.5-flash-native-audio-latest`, voice `Puck`, automatic activity detection), `AUDIO` (PCM16, 16 kHz in / 24 kHz out), and the message builders — lifted verbatim from the original app.
 - `GeminiLiveOrchestrator` — platform-agnostic session protocol (token proxy → WebSocket → setup → transcripts → status machine) with raw audio I/O delegated to an injected `AudioBridge`, so web (AudioWorklet) and native (PCM module) share one implementation.
 
-Everything is pure and deterministic — **124 unit tests, full typecheck**.
+Everything is pure and deterministic — **128 unit tests, full typecheck**.
 
 ### The map (`apps/web`)
 
