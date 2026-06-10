@@ -29,6 +29,7 @@ export function MapScreen({
   onShowScience,
   onShowPricing,
   onShowSettings,
+  onShowSounds,
 }: {
   onStartPractice?: () => void;
   onStartReview?: () => void;
@@ -36,6 +37,7 @@ export function MapScreen({
   onShowScience?: () => void;
   onShowPricing?: () => void;
   onShowSettings?: () => void;
+  onShowSounds?: () => void;
 }) {
   const { profile, skillStates: states, reviewItems, plan, usage, now } = useStore();
   const stateById = useMemo(() => new Map(states.map((s) => [s.skillId, s])), [states]);
@@ -65,6 +67,12 @@ export function MapScreen({
           <span className="text-lg font-semibold tracking-tight">FluentMap</span>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={onShowSounds}
+            className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-1.5 text-sm font-medium text-white/70 hover:bg-white/[0.06]"
+          >
+            Sounds
+          </button>
           <button
             onClick={onShowProgress}
             className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-1.5 text-sm font-medium text-white/70 hover:bg-white/[0.06]"

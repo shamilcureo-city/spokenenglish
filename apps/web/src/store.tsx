@@ -98,6 +98,7 @@ interface Store extends AppState {
   setPlan(name: string): void;
   addUsage(minutes: number): void;
   setReminder(r: Reminder): void;
+  practiceSkill(skillId: string, rating: Rating): void;
   startAssessment(): void;
   saveAssessment(r: AssessmentResult): void;
   enroll(): void;
@@ -197,6 +198,14 @@ export function StoreProvider({
     addUsage: (minutes) =>
       setState((s) => ({ ...s, usage: addUsageMinutes(s.usage, minutes, todayKey) })),
     setReminder: (r) => setState((s) => ({ ...s, reminder: r })),
+    practiceSkill: (skillId, rating) => {
+      const prior =
+        skillStates.find((s) => s.skillId === skillId) ??
+        newSkillState(userId ?? 'demo', skillId, now);
+      const updated = applyReview(prior, rating, now);
+      setSkillStates((prev) => mergeStates(prev, [updated]));
+      if (cloud) void repos.upsertSkillStates([updated]).catch(console.error);
+    },
     startAssessment: () => setState((s) => ({ ...s, stage: 'assessment' })),
     saveAssessment: (r) => {
       setState((s) => ({ ...s, assessment: r, stage: 'result' }));
