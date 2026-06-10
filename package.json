@@ -11,6 +11,12 @@
     "node": ">=20"
   },
   "scripts": {
+    "setup": "npm install && npm run build -w packages/core",
+    "dev": "npm run dev -w apps/web",
+    "build:core": "npm run build -w packages/core",
+    "build:core:watch": "npm run build -w packages/core -- --watch",
+    "build:web": "npm run build -w apps/web",
+    "seeds": "tsx scripts/gen-seeds.ts",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"
   }

@@ -2,6 +2,9 @@
 
 A science-driven spoken-English platform for India. Greenfield rebuild of the SpeakSaathi prototype around a transparent, evidence-based learning engine — the differentiator and the marketing story ("see the science; watch your map fill in").
 
+> **Run it:** `npm run setup && npm run dev` → http://localhost:5173 (demo mode, no config).
+> Real voice + accounts: see **[SETUP.md](SETUP.md)**.
+>
 > Full architecture & roadmap: `~/.claude/plans/i-want-to-make-federated-waterfall.md`
 
 ## Monorepo layout
