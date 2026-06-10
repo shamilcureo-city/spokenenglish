@@ -16,6 +16,7 @@ import {
   type ReviewItem,
   type SkillState,
 } from '@fluentmap/core/science';
+import { type Usage, addUsageMinutes, normalizeUsageForToday, toDateKey } from '@fluentmap/core/domain';
 import { buildDemoStates, buildDemoReviews, DEMO_NOW } from './mock/learner';
 import * as repos from './data/repos';
 
@@ -41,6 +42,8 @@ interface AppState {
   profile: Profile;
   assessment: AssessmentResult | null;
   trackId: string | null;
+  plan: string;
+  usage: Usage;
 }
 
 const DEFAULT: AppState = {
@@ -48,6 +51,8 @@ const DEFAULT: AppState = {
   profile: { name: '', l1: 'Hindi', goal: 'Daily English' },
   assessment: null,
   trackId: null,
+  plan: 'Free',
+  usage: { date: '1970-01-01', usedMinutes: 0 },
 };
 
 const KEY = 'fluentmap-state-v1';
@@ -75,9 +80,13 @@ interface Store extends AppState {
   reviewItems: ReviewItem[];
   streak: number;
   reviewsDone: number;
+  plan: string;
+  usage: Usage;
   now: Date;
   setProfile(p: Partial<Profile>): void;
   gradeReview(item: ReviewItem, rating: Rating): void;
+  setPlan(name: string): void;
+  addUsage(minutes: number): void;
   startAssessment(): void;
   saveAssessment(r: AssessmentResult): void;
   enroll(): void;
@@ -158,6 +167,9 @@ export function StoreProvider({
     };
   }, [cloud, userId]);
 
+  const todayKey = toDateKey(now);
+  const normalizedUsage = normalizeUsageForToday(state.usage, todayKey);
+
   const store: Store = {
     ...state,
     userId,
@@ -167,8 +179,12 @@ export function StoreProvider({
     reviewItems,
     streak,
     reviewsDone,
+    usage: normalizedUsage,
     now,
     setProfile: (p) => setState((s) => ({ ...s, profile: { ...s.profile, ...p } })),
+    setPlan: (name) => setState((s) => ({ ...s, plan: name })),
+    addUsage: (minutes) =>
+      setState((s) => ({ ...s, usage: addUsageMinutes(s.usage, minutes, todayKey) })),
     startAssessment: () => setState((s) => ({ ...s, stage: 'assessment' })),
     saveAssessment: (r) => {
       setState((s) => ({ ...s, assessment: r, stage: 'result' }));

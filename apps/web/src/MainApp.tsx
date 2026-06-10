@@ -5,10 +5,11 @@ import { LessonSession } from './session/LessonSession';
 import { ReviewSession } from './session/ReviewSession';
 import { ProgressScreen } from './session/ProgressScreen';
 import { ScienceScreen } from './ScienceScreen';
+import { PricingScreen } from './session/PricingScreen';
 import { useStore } from './store';
 import { chooseNextLesson } from './lib/nextLesson';
 
-type View = 'map' | 'practice' | 'review' | 'progress' | 'science';
+type View = 'map' | 'practice' | 'review' | 'progress' | 'science' | 'pricing';
 
 /** The main app shell (post-onboarding): map ↔ adaptive practice ↔ reviews. */
 export function MainApp() {
@@ -27,7 +28,14 @@ export function MainApp() {
   );
 
   if (view === 'practice') {
-    return <LessonSession lesson={next.lesson} rationale={next.rationale} onBack={() => setView('map')} />;
+    return (
+      <LessonSession
+        lesson={next.lesson}
+        rationale={next.rationale}
+        onBack={() => setView('map')}
+        onUpgrade={() => setView('pricing')}
+      />
+    );
   }
   if (view === 'review') {
     return <ReviewSession onBack={() => setView('map')} />;
@@ -38,12 +46,16 @@ export function MainApp() {
   if (view === 'science') {
     return <ScienceScreen onBack={() => setView('map')} />;
   }
+  if (view === 'pricing') {
+    return <PricingScreen onBack={() => setView('map')} />;
+  }
   return (
     <MapScreen
       onStartPractice={() => setView('practice')}
       onStartReview={() => setView('review')}
       onShowProgress={() => setView('progress')}
       onShowScience={() => setView('science')}
+      onShowPricing={() => setView('pricing')}
     />
   );
 }

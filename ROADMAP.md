@@ -51,7 +51,7 @@ Status against the approved 5-phase plan. ✅ = done · 🔲 = pending.
 ## Phase 5 — Native mobile + payments  🔲
 
 - 🔲 **5A — Mobile:** `apps/mobile` (Expo) + native `AudioBridge` (`react-native-audio-record`); feature parity via `packages/core`.
-- 🔲 **5B — Payments:** RevenueCat (mobile) / Razorpay (web) + entitlement gating (`subscription.js`) + daily-minute usage limits.
+- ◑ **5B — Payments:** ✅ Pricing screen (4 plans), mock checkout, **entitlement gating** (live plan + daily-minute usage; sessions blocked when out → upgrade CTA). 🔲 remaining: real Razorpay (web) / RevenueCat (mobile) gateway + webhooks.
 - 🔲 **5C — Retention & launch:** push reminders (`retention.js`), store submission, polish.
 
 ---
@@ -61,4 +61,5 @@ Status against the approved 5-phase plan. ✅ = done · 🔲 = pending.
 - ◑ Security: ✅ opt-in **ephemeral Gemini tokens** (`GEMINI_USE_EPHEMERAL_TOKENS`, falls back to the verified key path) so the raw key needn't reach the browser. 🔲 needs verification against a live key.
 - ✅ CI: GitHub Actions (`.github/workflows/ci.yml`) — builds core, typechecks both packages, runs the test suite on push/PR.
 - ✅ Robustness: voice orchestrator now surfaces mic-permission failures as errors (+test); a React `ErrorBoundary` prevents white-screens.
-- 🔲 Offline write-queue (currently write-through); public "how the science works" page.
+- ✅ Public **"The Science"** explainer page (real engine numbers + forgetting curve), linked from onboarding + the map.
+- 🔲 Offline write-queue (currently write-through).

@@ -27,13 +27,15 @@ export function MapScreen({
   onStartReview,
   onShowProgress,
   onShowScience,
+  onShowPricing,
 }: {
   onStartPractice?: () => void;
   onStartReview?: () => void;
   onShowProgress?: () => void;
   onShowScience?: () => void;
+  onShowPricing?: () => void;
 }) {
-  const { profile, skillStates: states, reviewItems, now } = useStore();
+  const { profile, skillStates: states, reviewItems, plan, usage, now } = useStore();
   const stateById = useMemo(() => new Map(states.map((s) => [s.skillId, s])), [states]);
 
   const score = fluentMapScore(states, SKILLS, now);
@@ -44,10 +46,8 @@ export function MapScreen({
   const weakest = weakestSkills(states, SKILLS, 5, now);
   const insights = buildL1Insights(profile.l1);
 
-  // Daily-minutes entitlement (demo usage; real usage tracked in the store later).
-  const plan = 'Free';
-  const todayKey = toDateKey(now);
-  const minutesLeft = getRemainingMinutes(plan, { date: todayKey, usedMinutes: 2 }, todayKey);
+  // Daily-minutes entitlement from the live plan + usage.
+  const minutesLeft = getRemainingMinutes(plan, usage, toDateKey(now));
   const dailyMinutes = getPlanByName(plan).dailyMinutes;
 
   const curveState: SkillState | undefined = weakest[0] && stateById.get(weakest[0].skill.id);
@@ -103,9 +103,12 @@ export function MapScreen({
             <p className="mt-1 max-w-[15rem] text-sm text-white/55">
               Namaste, {profile.name}. Speak a little every day — watch your map fill in.
             </p>
-            <p className="mt-2 text-[11px] text-white/40">
-              {plan} plan · <span className="text-white/70">{minutesLeft}/{dailyMinutes} min</span> left today
-            </p>
+            <button
+              onClick={onShowPricing}
+              className="mt-2 text-[11px] text-white/40 hover:text-white/70"
+            >
+              {plan} plan · <span className="text-white/70">{minutesLeft}/{dailyMinutes} min</span> left today · Upgrade →
+            </button>
           </div>
         </div>
         <div className="grid grid-cols-3 gap-3 self-center">

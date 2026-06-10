@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ingestSessionEvidence, type IngestResult } from '@fluentmap/core/science';
 import type { AssembledSession } from '@fluentmap/core/scoring';
-import type { Lesson } from '@fluentmap/core/domain';
+import { getRemainingMinutes, toDateKey, type Lesson } from '@fluentmap/core/domain';
 import { useGeminiLive } from '../voice/useGeminiLive';
 import { buildCoachPrompt } from '../voice/coachPrompt';
 import { scoreSession } from '../lib/api';
@@ -16,12 +16,15 @@ export function LessonSession({
   lesson,
   rationale,
   onBack,
+  onUpgrade,
 }: {
   lesson: Lesson;
   rationale: string;
   onBack: () => void;
+  onUpgrade?: () => void;
 }) {
-  const { profile, userId, skillStates, applyEvidence } = useStore();
+  const { profile, userId, skillStates, applyEvidence, plan, usage, addUsage, now } = useStore();
+  const minutesLeft = getRemainingMinutes(plan, usage, toDateKey(now));
   const systemInstruction = useMemo(
     () =>
       buildCoachPrompt({
@@ -34,6 +37,11 @@ export function LessonSession({
   );
 
   const { status, transcript, elapsed, analyser, start, stop } = useGeminiLive(systemInstruction);
+
+  function endSession() {
+    if (elapsed > 0) addUsage(Math.max(1, Math.ceil(elapsed / 60)));
+    stop();
+  }
   const [report, setReport] = useState<AssembledSession | null>(null);
   const [ingest, setIngest] = useState<IngestResult | null>(null);
   const [scoring, setScoring] = useState(false);
@@ -117,11 +125,21 @@ export function LessonSession({
         <div className="mt-5 flex justify-center">
           {isActive ? (
             <button
-              onClick={stop}
+              onClick={endSession}
               className="rounded-full bg-red-500/90 px-6 py-2.5 text-sm font-semibold text-white hover:bg-red-500"
             >
               End session
             </button>
+          ) : minutesLeft <= 0 ? (
+            <div className="text-center">
+              <div className="mb-2 text-sm text-amber-200/90">You're out of today's {plan} minutes.</div>
+              <button
+                onClick={onUpgrade}
+                className="rounded-full bg-gradient-to-r from-emerald-400 to-amber-300 px-7 py-2.5 text-sm font-bold text-black hover:opacity-90"
+              >
+                Upgrade for more →
+              </button>
+            </div>
           ) : (
             <button
               onClick={start}
