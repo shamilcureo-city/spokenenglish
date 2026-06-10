@@ -3,10 +3,11 @@ import type { TrackId } from '@fluentmap/core/domain';
 import { MapScreen } from './map/MapScreen';
 import { LessonSession } from './session/LessonSession';
 import { ReviewSession } from './session/ReviewSession';
+import { ProgressScreen } from './session/ProgressScreen';
 import { useStore } from './store';
 import { chooseNextLesson } from './lib/nextLesson';
 
-type View = 'map' | 'practice' | 'review';
+type View = 'map' | 'practice' | 'review' | 'progress';
 
 /** The main app shell (post-onboarding): map ↔ adaptive practice ↔ reviews. */
 export function MainApp() {
@@ -30,5 +31,14 @@ export function MainApp() {
   if (view === 'review') {
     return <ReviewSession onBack={() => setView('map')} />;
   }
-  return <MapScreen onStartPractice={() => setView('practice')} onStartReview={() => setView('review')} />;
+  if (view === 'progress') {
+    return <ProgressScreen onBack={() => setView('map')} />;
+  }
+  return (
+    <MapScreen
+      onStartPractice={() => setView('practice')}
+      onStartReview={() => setView('review')}
+      onShowProgress={() => setView('progress')}
+    />
+  );
 }

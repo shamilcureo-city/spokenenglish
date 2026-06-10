@@ -73,6 +73,8 @@ interface Store extends AppState {
   hydrating: boolean;
   skillStates: SkillState[];
   reviewItems: ReviewItem[];
+  streak: number;
+  reviewsDone: number;
   now: Date;
   setProfile(p: Partial<Profile>): void;
   gradeReview(item: ReviewItem, rating: Rating): void;
@@ -102,6 +104,8 @@ export function StoreProvider({
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>(() =>
     cloud ? [] : buildDemoReviews(loadLocal().profile.l1),
   );
+  const [streak, setStreak] = useState<number>(() => (cloud ? 0 : 6));
+  const [reviewsDone, setReviewsDone] = useState(0);
   const [hydrating, setHydrating] = useState(cloud);
   const now = useMemo(() => (cloud ? new Date() : DEMO_NOW), [cloud]);
 
@@ -129,6 +133,7 @@ export function StoreProvider({
         if (!active) return;
         setSkillStates(states);
         setReviewItems(reviews);
+        setStreak(profileRow?.streak ?? 0);
         setState((s) =>
           profileRow
             ? {
@@ -160,6 +165,8 @@ export function StoreProvider({
     hydrating,
     skillStates,
     reviewItems,
+    streak,
+    reviewsDone,
     now,
     setProfile: (p) => setState((s) => ({ ...s, profile: { ...s.profile, ...p } })),
     startAssessment: () => setState((s) => ({ ...s, stage: 'assessment' })),
@@ -202,6 +209,7 @@ export function StoreProvider({
       }
     },
     gradeReview: (item, rating) => {
+      setReviewsDone((n) => n + 1);
       const prior =
         skillStates.find((s) => s.skillId === item.skillId) ??
         newSkillState(userId ?? 'demo', item.skillId, now);

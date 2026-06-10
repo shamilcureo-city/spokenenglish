@@ -25,9 +25,11 @@ const LEGEND = [
 export function MapScreen({
   onStartPractice,
   onStartReview,
+  onShowProgress,
 }: {
   onStartPractice?: () => void;
   onStartReview?: () => void;
+  onShowProgress?: () => void;
 }) {
   const { profile, skillStates: states, reviewItems, now } = useStore();
   const stateById = useMemo(() => new Map(states.map((s) => [s.skillId, s])), [states]);
@@ -59,6 +61,12 @@ export function MapScreen({
           <span className="text-lg font-semibold tracking-tight">FluentMap</span>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={onShowProgress}
+            className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-1.5 text-sm font-medium text-white/70 hover:bg-white/[0.06]"
+          >
+            Progress
+          </button>
           {due > 0 && (
             <button
               onClick={onStartReview}

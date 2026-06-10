@@ -44,7 +44,7 @@ Status against the approved 5-phase plan. ✅ = done · 🔲 = pending.
 
 - 🔲 **4A — Admin:** `apps/admin` (or Studio workflows) CRUD for skills / lessons / rules + `lesson_target_skills` authoring.
 - 🔲 **4B — Library:** expand lessons & clusters; content versioning.
-- 🔲 **4C — Analytics:** dashboards (port `analytics.js` / `quality.js`) — activation, engagement, reliability, cohorts.
+- ◑ **4C — Analytics:** ✅ activation funnel + engagement ported (`analytics.ts`) and a learner **Progress screen** (streak, this-week, journey funnel, L1 patterns fixed); `quality.ts` ported. 🔲 remaining: ops/cohort dashboards.
 
 ---
 
