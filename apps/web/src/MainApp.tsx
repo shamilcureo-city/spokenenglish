@@ -4,10 +4,11 @@ import { MapScreen } from './map/MapScreen';
 import { LessonSession } from './session/LessonSession';
 import { ReviewSession } from './session/ReviewSession';
 import { ProgressScreen } from './session/ProgressScreen';
+import { ScienceScreen } from './ScienceScreen';
 import { useStore } from './store';
 import { chooseNextLesson } from './lib/nextLesson';
 
-type View = 'map' | 'practice' | 'review' | 'progress';
+type View = 'map' | 'practice' | 'review' | 'progress' | 'science';
 
 /** The main app shell (post-onboarding): map ↔ adaptive practice ↔ reviews. */
 export function MainApp() {
@@ -34,11 +35,15 @@ export function MainApp() {
   if (view === 'progress') {
     return <ProgressScreen onBack={() => setView('map')} />;
   }
+  if (view === 'science') {
+    return <ScienceScreen onBack={() => setView('map')} />;
+  }
   return (
     <MapScreen
       onStartPractice={() => setView('practice')}
       onStartReview={() => setView('review')}
       onShowProgress={() => setView('progress')}
+      onShowScience={() => setView('science')}
     />
   );
 }

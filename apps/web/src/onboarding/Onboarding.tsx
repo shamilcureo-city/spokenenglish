@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '../store';
+import { ScienceScreen } from '../ScienceScreen';
 
 const GOALS = ['Daily English', 'Interview English', 'Workplace English'];
 const LANGUAGES = ['Hindi', 'Tamil', 'Telugu', 'Kannada', 'Malayalam'];
@@ -9,6 +10,9 @@ export function Onboarding() {
   const [name, setName] = useState(profile.name);
   const [goal, setGoal] = useState(profile.goal);
   const [l1, setL1] = useState(profile.l1);
+  const [showScience, setShowScience] = useState(false);
+
+  if (showScience) return <ScienceScreen onBack={() => setShowScience(false)} />;
 
   function begin() {
     setProfile({ name: name.trim() || 'Learner', goal, l1 });
@@ -29,6 +33,12 @@ export function Onboarding() {
         A few quick things, then a <span className="text-white/80">5-minute voice assessment</span>.
         We'll measure your spoken English and build your personal skill map.
       </p>
+      <button
+        onClick={() => setShowScience(true)}
+        className="mt-3 text-xs font-medium text-emerald-300/80 hover:text-emerald-300"
+      >
+        See the science behind it →
+      </button>
 
       <label className="mt-7 block text-xs font-semibold uppercase tracking-wider text-white/40">
         Your name

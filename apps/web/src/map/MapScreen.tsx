@@ -26,10 +26,12 @@ export function MapScreen({
   onStartPractice,
   onStartReview,
   onShowProgress,
+  onShowScience,
 }: {
   onStartPractice?: () => void;
   onStartReview?: () => void;
   onShowProgress?: () => void;
+  onShowScience?: () => void;
 }) {
   const { profile, skillStates: states, reviewItems, now } = useStore();
   const stateById = useMemo(() => new Map(states.map((s) => [s.skillId, s])), [states]);
@@ -221,7 +223,10 @@ export function MapScreen({
       </div>
 
       <footer className="mt-8 text-center text-[11px] text-white/30">
-        Demo data generated from the real FSRS engine · FluentMap Phase 1
+        <button onClick={onShowScience} className="underline hover:text-white/60">
+          The science
+        </button>
+        {' · '}Demo data from the real FSRS engine
       </footer>
     </div>
   );
