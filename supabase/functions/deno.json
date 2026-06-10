@@ -1,0 +1,8 @@
+{
+  "imports": {
+    "@fluentmap/core/science": "../../packages/core/dist/science/index.js",
+    "@fluentmap/core/scoring": "../../packages/core/dist/scoring/index.js",
+    "@fluentmap/core/voice": "../../packages/core/dist/voice/orchestrator.js",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2"
+  }
+}

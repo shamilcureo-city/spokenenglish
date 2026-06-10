@@ -1,0 +1,27 @@
+{
+  "name": "@fluentmap/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared learning-science engine + ported domain logic (pure TypeScript)",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./science": { "types": "./dist/science/index.d.ts", "default": "./dist/science/index.js" },
+    "./voice": { "types": "./dist/voice/orchestrator.d.ts", "default": "./dist/voice/orchestrator.js" },
+    "./scoring": { "types": "./dist/scoring/index.d.ts", "default": "./dist/scoring/index.js" },
+    "./domain": { "types": "./dist/domain/index.d.ts", "default": "./dist/domain/index.js" }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "tsx": "^4.22.4",
+    "typescript": "^5.6.0"
+  }
+}
