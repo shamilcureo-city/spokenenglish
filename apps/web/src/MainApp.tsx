@@ -6,10 +6,11 @@ import { ReviewSession } from './session/ReviewSession';
 import { ProgressScreen } from './session/ProgressScreen';
 import { ScienceScreen } from './ScienceScreen';
 import { PricingScreen } from './session/PricingScreen';
+import { SettingsScreen } from './session/SettingsScreen';
 import { useStore } from './store';
 import { chooseNextLesson } from './lib/nextLesson';
 
-type View = 'map' | 'practice' | 'review' | 'progress' | 'science' | 'pricing';
+type View = 'map' | 'practice' | 'review' | 'progress' | 'science' | 'pricing' | 'settings';
 
 /** The main app shell (post-onboarding): map ↔ adaptive practice ↔ reviews. */
 export function MainApp() {
@@ -49,6 +50,9 @@ export function MainApp() {
   if (view === 'pricing') {
     return <PricingScreen onBack={() => setView('map')} />;
   }
+  if (view === 'settings') {
+    return <SettingsScreen onBack={() => setView('map')} onShowPricing={() => setView('pricing')} />;
+  }
   return (
     <MapScreen
       onStartPractice={() => setView('practice')}
@@ -56,6 +60,7 @@ export function MainApp() {
       onShowProgress={() => setView('progress')}
       onShowScience={() => setView('science')}
       onShowPricing={() => setView('pricing')}
+      onShowSettings={() => setView('settings')}
     />
   );
 }

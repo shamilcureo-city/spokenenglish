@@ -28,12 +28,14 @@ export function MapScreen({
   onShowProgress,
   onShowScience,
   onShowPricing,
+  onShowSettings,
 }: {
   onStartPractice?: () => void;
   onStartReview?: () => void;
   onShowProgress?: () => void;
   onShowScience?: () => void;
   onShowPricing?: () => void;
+  onShowSettings?: () => void;
 }) {
   const { profile, skillStates: states, reviewItems, plan, usage, now } = useStore();
   const stateById = useMemo(() => new Map(states.map((s) => [s.skillId, s])), [states]);
@@ -83,12 +85,15 @@ export function MapScreen({
           >
             Practice →
           </button>
-          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-sm">
+          <button
+            onClick={onShowSettings}
+            className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-sm hover:bg-white/[0.06]"
+          >
             <span className="text-white/55">{profile.l1} · {profile.goal}</span>
             <span className="grid h-6 w-6 place-items-center rounded-full bg-white/10 text-xs font-semibold">
               {profile.name[0]}
             </span>
-          </div>
+          </button>
         </div>
       </header>
 

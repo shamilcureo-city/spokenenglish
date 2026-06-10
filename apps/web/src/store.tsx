@@ -16,7 +16,14 @@ import {
   type ReviewItem,
   type SkillState,
 } from '@fluentmap/core/science';
-import { type Usage, addUsageMinutes, normalizeUsageForToday, toDateKey } from '@fluentmap/core/domain';
+import {
+  type Reminder,
+  type Usage,
+  addUsageMinutes,
+  defaultReminder,
+  normalizeUsageForToday,
+  toDateKey,
+} from '@fluentmap/core/domain';
 import { buildDemoStates, buildDemoReviews, DEMO_NOW } from './mock/learner';
 import * as repos from './data/repos';
 
@@ -44,6 +51,7 @@ interface AppState {
   trackId: string | null;
   plan: string;
   usage: Usage;
+  reminder: Reminder;
 }
 
 const DEFAULT: AppState = {
@@ -53,6 +61,7 @@ const DEFAULT: AppState = {
   trackId: null,
   plan: 'Free',
   usage: { date: '1970-01-01', usedMinutes: 0 },
+  reminder: defaultReminder,
 };
 
 const KEY = 'fluentmap-state-v1';
@@ -82,11 +91,13 @@ interface Store extends AppState {
   reviewsDone: number;
   plan: string;
   usage: Usage;
+  reminder: Reminder;
   now: Date;
   setProfile(p: Partial<Profile>): void;
   gradeReview(item: ReviewItem, rating: Rating): void;
   setPlan(name: string): void;
   addUsage(minutes: number): void;
+  setReminder(r: Reminder): void;
   startAssessment(): void;
   saveAssessment(r: AssessmentResult): void;
   enroll(): void;
@@ -185,6 +196,7 @@ export function StoreProvider({
     setPlan: (name) => setState((s) => ({ ...s, plan: name })),
     addUsage: (minutes) =>
       setState((s) => ({ ...s, usage: addUsageMinutes(s.usage, minutes, todayKey) })),
+    setReminder: (r) => setState((s) => ({ ...s, reminder: r })),
     startAssessment: () => setState((s) => ({ ...s, stage: 'assessment' })),
     saveAssessment: (r) => {
       setState((s) => ({ ...s, assessment: r, stage: 'result' }));
