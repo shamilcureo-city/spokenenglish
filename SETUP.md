@@ -5,7 +5,8 @@ want the real voice loop or accounts.
 
 ## Prerequisites
 - **Node ≥ 20** (everything)
-- **Docker** + **Supabase CLI** + a **Google Gemini API key** (Tiers 2–3 only)
+- A **Google Gemini API key** (Tier 2+ — the real voice)
+- **Docker** + **Supabase CLI** — only for Tier 2b / Tier 3 (the Supabase paths)
 
 ---
 
@@ -24,30 +25,51 @@ That's it. No keys, no accounts.
 
 ---
 
-## Tier 2 — Real voice (Supabase local + Gemini key, still no login)
+## Tier 2 — Real voice (local API server, **no Docker, no Supabase**) ⭐ recommended
 
-Adds the **real Gemini Live voice loop** and AI scoring. The app stays in demo
-mode (no login) — only the voice + scoring become real. This is the experience
-to try first.
+Adds the **real Gemini Live voice loop** and AI scoring with a tiny local server
+(`server/index.mjs`) that does the Gemini token-proxy + scoring — reusing the
+exact same `packages/core` logic the edge functions use. **No Docker, no Supabase,
+nothing to install beyond `npm`.** The app stays in demo mode (no login); only the
+voice + scoring become real. This is the experience to try first.
 
 ```bash
 npm run setup
 
-# 1. Local Supabase (Postgres + the live_tokens table + the skills seed)
-supabase start
-supabase db reset           # applies migrations + supabase/seed.sql
+# 1. Put your Gemini key where the server can find it (any one of these):
+#    - export GEMINI_API_KEY=...      (env)
+#    - fluentmap/supabase/.env        (GEMINI_API_KEY=...)
+#    It also auto-detects ../spokenenglish/.env if you have the old prototype.
 
-# 2. Your Gemini key, then serve the edge functions
-echo "GEMINI_API_KEY=your-gemini-key" > supabase/.env
-supabase functions serve --no-verify-jwt --env-file supabase/.env
+# 2. Start the API server (terminal 1)
+npm run dev:api             # → http://localhost:8787  (prints "Gemini key ✅ loaded")
 
-# 3. In another terminal, run the web app (no .env needed)
-npm run dev                 # → http://localhost:5173
+# 3. Start the web app (terminal 2)
+npm run dev                 # → http://localhost:5173 (or next free port)
 ```
 
-The web app calls the local functions at `http://localhost:54321/functions/v1`
-by default, so **Practice → speak with the coach → Finish → report** works
-end to end. (Allow microphone access when the browser asks.)
+`apps/web/.env` already points the app at `http://localhost:8787`, so **Practice →
+speak with the coach → Finish → report** and the **5-minute assessment** work end
+to end. (Allow microphone access when the browser asks.) The token proxy is
+in-memory and the skill list comes from `core` — no database needed.
+
+---
+
+## Tier 2b — Real voice via local Supabase (Docker)
+
+Same result as Tier 2, but running the actual edge functions on a local Supabase
+stack. Heavier (Docker images are ~several GB) — only do this to exercise the
+Supabase path itself.
+
+```bash
+npm run setup
+supabase start
+supabase db reset           # applies migrations + supabase/seed.sql
+echo "GEMINI_API_KEY=your-gemini-key" > supabase/.env
+supabase functions serve --no-verify-jwt --env-file supabase/.env
+# set apps/web/.env → VITE_FUNCTIONS_URL=http://localhost:54321/functions/v1
+npm run dev
+```
 
 ---
 
@@ -92,6 +114,7 @@ supabase functions deploy                          # edge functions
 |---|---|
 | `npm run setup` | install + build the engine |
 | `npm run dev` | run the web app (Vite) |
+| `npm run dev:api` | run the local API server (real voice, no Docker) |
 | `npm run build:core` | rebuild `packages/core` (do this after editing it) |
 | `npm run build:core:watch` | rebuild core on change |
 | `npm test` | run the 128 unit tests |

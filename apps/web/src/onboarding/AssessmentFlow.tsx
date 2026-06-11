@@ -136,9 +136,17 @@ export function AssessmentFlow() {
           )}
         </div>
         {isError && (
-          <p className="mt-3 text-center text-[11px] text-white/40">
-            Couldn't reach the examiner — start the backend, or skip below.
-          </p>
+          <div className="mt-4 text-center">
+            <p className="text-xs text-white/45">
+              The live examiner needs the backend running. Skip to explore the whole app now:
+            </p>
+            <button
+              onClick={skip}
+              className="mt-3 rounded-full bg-gradient-to-r from-emerald-400 to-amber-300 px-6 py-2.5 text-sm font-bold text-black hover:opacity-90"
+            >
+              Skip &amp; explore the app (sample level) →
+            </button>
+          </div>
         )}
       </section>
 

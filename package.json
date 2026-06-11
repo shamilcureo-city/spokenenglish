@@ -10,9 +10,14 @@
   "engines": {
     "node": ">=20"
   },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  },
   "scripts": {
     "setup": "npm install && npm run build -w packages/core",
     "dev": "npm run dev -w apps/web",
+    "dev:api": "node server/index.mjs",
     "build:core": "npm run build -w packages/core",
     "build:core:watch": "npm run build -w packages/core -- --watch",
     "build:web": "npm run build -w apps/web",

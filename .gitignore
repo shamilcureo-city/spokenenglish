@@ -6,3 +6,5 @@ dist/
 .env.local
 .turbo/
 coverage/
+supabase/.temp/
+.claude/settings.local.json
