@@ -11,7 +11,7 @@
  */
 
 import type { ConversationMode } from './types.js';
-import type { Lesson } from './curriculum.js';
+import { pickScenario, type Lesson } from './curriculum.js';
 import { COACH } from './coach.js';
 import { personaFlavor, type GoalId } from './personalization.js';
 
@@ -25,6 +25,8 @@ export interface PartnerPromptInput {
   warmupPrompt?: string;
   /** lesson: the course lesson being practised. */
   lesson?: Lesson;
+  /** Which attempt this is (0-based) — rotates the lesson's scenario variants on redo. */
+  attempt?: number;
   /** Personalization — the learner's main goal, used to flavour examples/scenarios. */
   goal?: GoalId;
   /** Personalization — a few interests the partner can naturally bring up. */
@@ -48,7 +50,7 @@ function baseVoice(supportLanguage: string): string {
 }
 
 export function buildPartnerPrompt(input: PartnerPromptInput): string {
-  const { mode, supportLanguage, userName, warmupPrompt, lesson, goal, interests } = input;
+  const { mode, supportLanguage, userName, warmupPrompt, lesson, attempt, goal, interests } = input;
   const name = userName?.trim() ? userName.trim() : 'there';
   // Voice rules + (optional) personalization flavour, as the shared intro for both modes.
   const base = [baseVoice(supportLanguage), personaFlavor(goal, interests)].filter(Boolean).join('\n');
@@ -59,7 +61,7 @@ export function buildPartnerPrompt(input: PartnerPromptInput): string {
       base,
       '',
       `This is a guided speaking lesson. The goal: ${lesson.fn}. By the end, the learner should be able to: "${lesson.canDo}".`,
-      `Run this situation with them: ${lesson.scenario}`,
+      `Run this situation with them: ${pickScenario(lesson, attempt ?? 0)}`,
       'Steer the conversation so they naturally get to USE these target moves — do NOT read the list aloud; draw them out by what you say and ask:',
       phraseList,
       '',

@@ -40,6 +40,8 @@ interface Persisted {
   completedLessonIds: string[];
   /** Best stars earned per lesson id. */
   lessonStars: Record<string, number>;
+  /** Times each lesson has been finished — rotates the scenario variant on redo. */
+  lessonAttempts: Record<string, number>;
   xp: number;
   recaps: SavedRecap[];
   /** yyyy-mm-dd local dates the user practised. */
@@ -58,6 +60,7 @@ const DEFAULT: Persisted = {
   placement: null,
   completedLessonIds: [],
   lessonStars: {},
+  lessonAttempts: {},
   xp: 0,
   recaps: [],
   days: [],
@@ -163,6 +166,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ? s.completedLessonIds
           : [...s.completedLessonIds, lessonId],
         lessonStars: { ...s.lessonStars, [lessonId]: Math.max(s.lessonStars[lessonId] ?? 0, score.stars) },
+        lessonAttempts: { ...s.lessonAttempts, [lessonId]: (s.lessonAttempts[lessonId] ?? 0) + 1 },
         xp: s.xp + score.xp,
         days: withToday(s),
       })),

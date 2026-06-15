@@ -12,6 +12,7 @@ import {
   isLessonUnlocked,
   levelProgress,
   courseProgress,
+  pickScenario,
 } from '../src/conversation/index.js';
 
 test('curriculum has 3 levels, 16 units, and well-formed lessons', () => {
@@ -31,6 +32,28 @@ test('curriculum has 3 levels, 16 units, and well-formed lessons', () => {
 
 test('every unit has at least one lesson', () => {
   for (const u of UNITS) assert.ok(lessonsByUnit(u.id).length >= 1, `unit ${u.id} has lessons`);
+});
+
+test('course is authored to full depth: ~64 lessons, every unit has at least 4', () => {
+  assert.ok(LESSONS.length >= 60, `>=60 lessons (got ${LESSONS.length})`);
+  for (const u of UNITS) assert.ok(lessonsByUnit(u.id).length >= 4, `unit ${u.id} depth (${lessonsByUnit(u.id).length})`);
+});
+
+test('every lesson: 5–8 phrases, ≥1 distinct scenario variant, id namespaced to its unit', () => {
+  for (const l of LESSONS) {
+    assert.ok(l.phrases.length >= 5 && l.phrases.length <= 8, `${l.id} phrases 5–8 (got ${l.phrases.length})`);
+    assert.ok((l.variants?.length ?? 0) >= 1, `${l.id} has at least one variant`);
+    assert.ok(l.id.startsWith(l.unitId + '-'), `${l.id} namespaced to ${l.unitId}`);
+    for (const v of l.variants ?? []) assert.ok(v.trim() && v !== l.scenario, `${l.id} variant distinct & non-empty`);
+  }
+});
+
+test('pickScenario rotates through the variants by attempt and wraps', () => {
+  const l = LESSONS[0]!;
+  const all = [l.scenario, ...(l.variants ?? [])];
+  assert.equal(pickScenario(l, 0), all[0]);
+  assert.equal(pickScenario(l, all.length), all[0]); // wraps around
+  if (all.length > 1) assert.equal(pickScenario(l, 1), all[1]);
 });
 
 test('nextLesson starts at the very first lesson when nothing is done', () => {

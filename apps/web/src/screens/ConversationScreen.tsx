@@ -24,9 +24,10 @@ export function ConversationScreen({
   onEnd: (transcript: Turn[]) => void;
   onBack: () => void;
 }) {
-  const { profile, liveSecondsUsedToday, recordLiveSeconds } = useStore();
+  const { profile, lessonAttempts, liveSecondsUsedToday, recordLiveSeconds } = useStore();
   const secondsLeft = Math.max(0, DAILY_FREE_LIVE_SECONDS - liveSecondsUsedToday);
   const outOfMinutes = secondsLeft <= 0;
+  const attempt = lesson ? lessonAttempts[lesson.id] ?? 0 : 0;
 
   const systemInstruction = useMemo(
     () =>
@@ -36,10 +37,11 @@ export function ConversationScreen({
         userName: profile.name,
         warmupPrompt,
         lesson,
+        attempt,
         goal: profile.goal,
         interests: profile.interests,
       }),
-    [mode, profile.l1, profile.name, warmupPrompt, lesson, profile.goal, profile.interests],
+    [mode, profile.l1, profile.name, warmupPrompt, lesson, attempt, profile.goal, profile.interests],
   );
 
   const { status, transcript, elapsed, analyser, micBlocked, start, stop, sendText } =
