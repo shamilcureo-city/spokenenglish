@@ -9,6 +9,7 @@ import {
   humaneStreak,
   WARMUP_XP,
   type ConversationMode,
+  type GoalId,
   type LessonScore,
   type Placement,
   type Recap,
@@ -18,6 +19,10 @@ export interface Profile {
   name: string;
   /** Mother tongue, for the recap explanations. */
   l1: string;
+  /** Personalization: the learner's main goal (flavours the practice). */
+  goal?: GoalId;
+  /** Personalization: a few interests the partner can bring up. */
+  interests?: string[];
 }
 
 export interface SavedRecap {

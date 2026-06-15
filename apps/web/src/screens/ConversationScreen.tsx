@@ -36,8 +36,10 @@ export function ConversationScreen({
         userName: profile.name,
         warmupPrompt,
         lesson,
+        goal: profile.goal,
+        interests: profile.interests,
       }),
-    [mode, profile.l1, profile.name, warmupPrompt, lesson],
+    [mode, profile.l1, profile.name, warmupPrompt, lesson, profile.goal, profile.interests],
   );
 
   const { status, transcript, elapsed, analyser, micBlocked, start, stop, sendText } =

@@ -194,3 +194,21 @@ export function courseProgress(completedIds: string[]): Progress {
   const d = LESSONS.filter((l) => done.has(l.id)).length;
   return { done: d, total: LESSONS.length, pct: LESSONS.length ? Math.round((d / LESSONS.length) * 100) : 0 };
 }
+
+/**
+ * Weak spots to resurface for review: completed lessons whose best score is under
+ * 3 stars, weakest first (ties broken by course order). For the "review & improve"
+ * nudge — spaced re-practice of exactly what didn't land.
+ */
+export function weakLessons(
+  lessonStars: Record<string, number>,
+  completedIds: string[],
+  limit = 3,
+): Lesson[] {
+  return completedIds
+    .map((id) => ({ lesson: lessonById(id), stars: lessonStars[id] ?? 0 }))
+    .filter((x): x is { lesson: Lesson; stars: number } => !!x.lesson && x.stars < 3)
+    .sort((a, b) => a.stars - b.stars || LESSON_INDEX.get(a.lesson.id)! - LESSON_INDEX.get(b.lesson.id)!)
+    .slice(0, Math.max(0, limit))
+    .map((x) => x.lesson);
+}

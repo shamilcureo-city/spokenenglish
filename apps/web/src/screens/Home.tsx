@@ -2,7 +2,8 @@ import {
   nextLesson,
   courseProgress,
   unitById,
-  warmupForDay,
+  warmupForUser,
+  weakLessons,
   xpIntoLevel,
   type Lesson,
 } from '@fluentmap/core/conversation';
@@ -25,13 +26,14 @@ export function Home({
   onProgress: () => void;
   onSettings: () => void;
 }) {
-  const { profile, completedLessonIds, placement, weeklyGoal, weekProgress, streak, xp, days, reminderTime } =
+  const { profile, completedLessonIds, lessonStars, placement, weeklyGoal, weekProgress, streak, xp, days, reminderTime } =
     useStore();
   const lvl = xpIntoLevel(xp);
   const practicedToday = days.includes(dateKey());
   const next = nextLesson(completedLessonIds, placement?.unitId);
   const pct = courseProgress(completedLessonIds).pct;
-  const warmup = warmupForDay(todayIndex());
+  const warmup = warmupForUser(todayIndex(), profile.interests);
+  const weakest = weakLessons(lessonStars, completedLessonIds, 1)[0];
 
   function invite() {
     void (async () => {
@@ -100,6 +102,23 @@ export function Home({
           <div className="text-lg font-bold">🎉 Course complete!</div>
           <div className="mt-1 text-sm text-black/70">Keep your English sharp with a daily free-talk below.</div>
         </div>
+      )}
+
+      {/* Review & improve — resurface the weakest completed lesson (personalized spaced practice) */}
+      {weakest && (
+        <button
+          onClick={() => onOpenLesson(weakest)}
+          className="mb-3 flex w-full items-center justify-between rounded-2xl border border-amber-300/25 bg-amber-300/[0.05] p-4 text-left transition hover:border-amber-300/45 hover:bg-amber-300/[0.09]"
+        >
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-amber-300/80">
+              Review &amp; improve · {lessonStars[weakest.id] ?? 0}★
+            </div>
+            <div className="mt-1 text-sm font-semibold text-white/85">{weakest.title}</div>
+            <div className="text-xs text-white/45">Redo this one and beat your best.</div>
+          </div>
+          <span className="text-amber-300/70">↻</span>
+        </button>
       )}
 
       {/* Browse the course */}

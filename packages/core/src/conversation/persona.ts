@@ -13,6 +13,7 @@
 import type { ConversationMode } from './types.js';
 import type { Lesson } from './curriculum.js';
 import { COACH } from './coach.js';
+import { personaFlavor, type GoalId } from './personalization.js';
 
 export interface PartnerPromptInput {
   mode: ConversationMode;
@@ -24,6 +25,10 @@ export interface PartnerPromptInput {
   warmupPrompt?: string;
   /** lesson: the course lesson being practised. */
   lesson?: Lesson;
+  /** Personalization — the learner's main goal, used to flavour examples/scenarios. */
+  goal?: GoalId;
+  /** Personalization — a few interests the partner can naturally bring up. */
+  interests?: string[];
 }
 
 /** Shared "talk like a real human on a voice call" rules. */
@@ -43,9 +48,10 @@ function baseVoice(supportLanguage: string): string {
 }
 
 export function buildPartnerPrompt(input: PartnerPromptInput): string {
-  const { mode, supportLanguage, userName, warmupPrompt, lesson } = input;
+  const { mode, supportLanguage, userName, warmupPrompt, lesson, goal, interests } = input;
   const name = userName?.trim() ? userName.trim() : 'there';
-  const base = baseVoice(supportLanguage);
+  // Voice rules + (optional) personalization flavour, as the shared intro for both modes.
+  const base = [baseVoice(supportLanguage), personaFlavor(goal, interests)].filter(Boolean).join('\n');
 
   if (mode === 'lesson' && lesson) {
     const phraseList = lesson.phrases.map((p) => `  - ${p}`).join('\n');

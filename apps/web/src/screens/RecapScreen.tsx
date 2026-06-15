@@ -66,20 +66,25 @@ export function RecapScreen({
           const newXp = xp + sc.xp;
           const unitLessons = lessonsByUnit(lesson.unitId);
           const doneAfter = new Set([...completedLessonIds, lesson.id]);
-          const unitDone = unitLessons.length > 0 && unitLessons.every((l) => doneAfter.has(l.id));
-          const leveledUp = levelForXp(newXp) > levelForXp(xp);
+          // First clear vs. a redo (the weak-spot card invites redoing completed lessons):
+          // only celebrate / count a unit as complete the first time it actually completes.
+          const firstClear = !completedLessonIds.includes(lesson.id);
+          const unitNewlyDone =
+            firstClear && unitLessons.length > 0 && unitLessons.every((l) => doneAfter.has(l.id));
+          const leveledUp = levelForXp(newXp) > levelForXp(xp); // XP rises on a redo too — legit
           const queue: { emoji: string; title: string; subtitle?: string }[] = [];
-          if (unitDone) queue.push({ emoji: '🏆', title: 'Unit complete!', subtitle: unitById(lesson.unitId)?.title });
+          if (unitNewlyDone)
+            queue.push({ emoji: '🏆', title: 'Unit complete!', subtitle: unitById(lesson.unitId)?.title });
           if (leveledUp)
             queue.push({ emoji: '⚡', title: `Level ${levelForXp(newXp)}!`, subtitle: "You're getting more fluent." });
           setCelebrations(queue);
           finishLesson(lesson.id, sc);
-          track('lesson_complete', { lesson: lesson.id, stars: sc.stars, xp: sc.xp });
-          if (unitDone) track('unit_complete', { unit: lesson.unitId });
+          track('lesson_complete', { lesson: lesson.id, stars: sc.stars, xp: sc.xp, redo: !firstClear });
+          if (unitNewlyDone) track('unit_complete', { unit: lesson.unitId });
           if (leveledUp) track('level_up', { level: levelForXp(newXp) });
           nextWin = {
-            kind: leveledUp ? 'levelup' : unitDone ? 'unit' : 'lesson',
-            title: unitDone ? unitById(lesson.unitId)?.title : lesson.title,
+            kind: leveledUp ? 'levelup' : unitNewlyDone ? 'unit' : 'lesson',
+            title: unitNewlyDone ? unitById(lesson.unitId)?.title : lesson.title,
             stars: sc.stars,
             xp: sc.xp,
             streak: liveStreak,

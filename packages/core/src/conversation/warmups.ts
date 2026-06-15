@@ -35,3 +35,36 @@ export function warmupForDay(dayIndex: number): Warmup {
   const i = ((Math.trunc(dayIndex) % n) + n) % n;
   return WARMUPS[i]!;
 }
+
+/** Interest → a warm-up that naturally exercises it. */
+const INTEREST_WARMUP: Record<string, string> = {
+  Travel: 'travel',
+  Food: 'food',
+  Movies: 'show',
+  Music: 'hobby',
+  Family: 'family',
+  Sports: 'weekend',
+  Cricket: 'weekend',
+  Books: 'learn',
+  Tech: 'learn',
+  Business: 'learn',
+  Fashion: 'place',
+  Health: 'relax',
+};
+
+/**
+ * A personalized daily free-talk: on roughly every other day, pick a topic tied to
+ * the learner's interests; otherwise fall back to the normal rotation (keeps variety
+ * so it never feels repetitive). Deterministic in `dayIndex`.
+ */
+export function warmupForUser(dayIndex: number, interests: string[] = []): Warmup {
+  const ids = new Set(interests.map((i) => INTEREST_WARMUP[i]).filter(Boolean) as string[]);
+  const matches = WARMUPS.filter((w) => ids.has(w.id));
+  const day = Math.trunc(dayIndex);
+  if (matches.length && day % 2 === 0) {
+    const n = matches.length;
+    const i = ((Math.floor(day / 2) % n) + n) % n;
+    return matches[i]!;
+  }
+  return warmupForDay(dayIndex);
+}
