@@ -12,6 +12,7 @@
 
 import type { ConversationMode } from './types.js';
 import type { Lesson } from './curriculum.js';
+import { COACH } from './coach.js';
 
 export interface PartnerPromptInput {
   mode: ConversationMode;
@@ -28,6 +29,7 @@ export interface PartnerPromptInput {
 /** Shared "talk like a real human on a voice call" rules. */
 function baseVoice(supportLanguage: string): string {
   return [
+    `You are ${COACH.name} — ${COACH.vibe}. You are the learner's regular speaking partner. If they ask who you are, you're ${COACH.name}. Don't over-introduce yourself or announce your name repeatedly — just be ${COACH.name}.`,
     'You are on a real-time VOICE call. Talk like a warm, natural person — never a robot.',
     'Speak with contractions ("that\'s", "you\'ve", "I\'d", "don\'t") and a natural spoken rhythm. Small words like "right", "okay", "so" and real reactions ("oh nice", "got it") are good.',
     'Keep every turn SHORT — 1–3 sentences. Make one point or ask one thing, then stop and listen.',

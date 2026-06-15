@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { buildPartnerPrompt, type ConversationMode, type Lesson, type Turn } from '@fluentmap/core/conversation';
+import { buildPartnerPrompt, COACH_NAME, type ConversationMode, type Lesson, type Turn } from '@fluentmap/core/conversation';
 import { useGeminiLive } from '../voice/useGeminiLive';
 import { AudioVisualizer } from '../session/AudioVisualizer';
 import { useStore } from '../store';
@@ -79,7 +79,7 @@ export function ConversationScreen({
           ? 'Speaking…'
           : isError
             ? 'Something went wrong'
-            : 'Ready when you are';
+            : `${COACH_NAME} is ready when you are`;
 
   function end() {
     stop();
@@ -133,6 +133,9 @@ export function ConversationScreen({
           ) : (
             <p className="text-sm leading-relaxed text-white/75">{warmupPrompt}</p>
           )}
+          <p className="mt-3 border-t border-white/5 pt-3 text-xs text-white/40">
+            {COACH_NAME} will say hi first — press start, listen, then just reply. No rush.
+          </p>
         </div>
       )}
 

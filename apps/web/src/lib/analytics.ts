@@ -13,7 +13,10 @@ export type AnalyticsEvent =
   | 'session_end'
   | 'lesson_complete'
   | 'level_up'
-  | 'unit_complete';
+  | 'unit_complete'
+  // growth loop (Phase 2)
+  | 'share_win'
+  | 'invite_sent';
 
 interface LoggedEvent {
   event: AnalyticsEvent;

@@ -4,6 +4,8 @@ import {
   levelForXp,
   lessonsByUnit,
   unitById,
+  humaneStreak,
+  WARMUP_XP,
   type ConversationMode,
   type Lesson,
   type LessonScore,
@@ -11,8 +13,9 @@ import {
   type Turn,
 } from '@fluentmap/core/conversation';
 import { getRecap } from '../lib/api';
-import { useStore } from '../store';
+import { useStore, dateKey, shiftKey } from '../store';
 import { track } from '../lib/analytics';
+import { shareWin, renderWinCard, type Win } from '../lib/share';
 import { Celebration } from './Celebration';
 import { DimensionBar, Page } from './ui';
 
@@ -29,11 +32,17 @@ export function RecapScreen({
   onDone: () => void;
   onRedo?: () => void;
 }) {
-  const { profile, addRecap, finishLesson, recordWarmup, xp, completedLessonIds } = useStore();
+  const { profile, addRecap, finishLesson, recordWarmup, xp, streak, days, completedLessonIds } = useStore();
+  // This session counts today, but `days` won't include today until finishLesson/recordWarmup
+  // commits on the next render — so forward-correct the streak for the share card (like XP/level).
+  const liveStreak = days.includes(dateKey()) ? streak : humaneStreak([...days, dateKey()], shiftKey);
   const [recap, setRecap] = useState<Recap | null>(null);
   const [score, setScore] = useState<LessonScore | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [celebrations, setCelebrations] = useState<{ emoji: string; title: string; subtitle?: string }[]>([]);
+  const [win, setWin] = useState<Win | null>(null);
+  const [cardFile, setCardFile] = useState<File | null>(null);
+  const [shareMsg, setShareMsg] = useState<string | null>(null);
   const ran = useRef(false);
 
   const spoke = transcript.some((t) => t.speaker === 'learner' && t.text.trim().length > 0);
@@ -43,12 +52,14 @@ export function RecapScreen({
     if (ran.current) return;
     ran.current = true;
     if (!spoke) return;
-    let active = true;
+    // The `ran` guard already prevents the double-run; do NOT also add an unmount
+    // cancellation flag — under StrictMode the two together strand the recap on its
+    // loading state forever (the remount short-circuits before re-arming the flag).
     void (async () => {
       try {
         const r = await getRecap({ transcript, mode, supportLanguage: profile.l1, lesson });
-        if (!active) return;
         setRecap(r);
+        let nextWin: Win;
         if (lesson) {
           const sc = scoreLesson(r, lesson, transcript);
           setScore(sc);
@@ -66,19 +77,45 @@ export function RecapScreen({
           track('lesson_complete', { lesson: lesson.id, stars: sc.stars, xp: sc.xp });
           if (unitDone) track('unit_complete', { unit: lesson.unitId });
           if (leveledUp) track('level_up', { level: levelForXp(newXp) });
+          nextWin = {
+            kind: leveledUp ? 'levelup' : unitDone ? 'unit' : 'lesson',
+            title: unitDone ? unitById(lesson.unitId)?.title : lesson.title,
+            stars: sc.stars,
+            xp: sc.xp,
+            streak: liveStreak,
+            level: levelForXp(newXp),
+          };
         } else {
           recordWarmup();
+          nextWin = { kind: 'warmup', xp: WARMUP_XP, streak: liveStreak, level: levelForXp(xp + WARMUP_XP) };
         }
+        setWin(nextWin);
+        // Pre-render the share card now, so the Share click stays inside the user gesture.
+        void renderWinCard(nextWin).then(setCardFile);
         track('session_end', { mode });
         addRecap({ mode, title, recap: r });
       } catch (e) {
-        if (active) setError((e as Error).message);
+        setError((e as Error).message);
       }
     })();
-    return () => {
-      active = false;
-    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function onShare() {
+    if (!win) return;
+    setShareMsg(null);
+    const r = await shareWin(win, cardFile);
+    track('share_win', { kind: win.kind, result: r });
+    if (r === 'dismissed') return; // user backed out of the sheet — say nothing
+    setShareMsg(
+      r === 'copied'
+        ? '📋 Copied — paste it into any chat.'
+        : r === 'whatsapp'
+          ? 'Opening WhatsApp…'
+          : r === 'shared'
+            ? 'Thanks for spreading the word 💚'
+            : "Sharing isn't available on this device.",
+    );
+  }
 
   if (!spoke) {
     return (
@@ -169,6 +206,22 @@ export function RecapScreen({
             </div>
           )}
         </section>
+      )}
+
+      {/* Share my win — the growth loop (WhatsApp-first) */}
+      {win && (
+        <div className="mb-6 flex flex-col items-center gap-2">
+          <button
+            onClick={() => void onShare()}
+            className="inline-flex items-center gap-2 rounded-full bg-[#25D366] px-7 py-3 text-sm font-bold text-black shadow-lg shadow-[#25D366]/20 transition hover:brightness-110"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden="true">
+              <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.9c0 1.76.46 3.48 1.34 5L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.9-4.45 9.9-9.9 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2Zm5.8 14.13c-.24.68-1.42 1.32-1.96 1.36-.5.05-.97.23-3.27-.68-2.76-1.09-4.5-3.92-4.64-4.1-.13-.18-1.1-1.47-1.1-2.8 0-1.34.7-1.99.95-2.27.25-.27.54-.34.72-.34h.52c.17.01.39-.06.61.47.24.56.81 1.94.88 2.08.07.14.12.3.02.48-.09.18-.14.3-.27.46-.14.16-.29.36-.41.48-.14.14-.28.29-.12.56.16.27.71 1.17 1.53 1.9 1.05.94 1.94 1.23 2.21 1.37.27.14.43.12.59-.07.16-.18.68-.79.86-1.07.18-.27.36-.22.61-.13.25.09 1.6.76 1.88.9.27.14.45.2.52.32.07.11.07.66-.17 1.34Z" />
+            </svg>
+            Share my win
+          </button>
+          {shareMsg && <p className="text-xs text-white/55">{shareMsg}</p>}
+        </div>
       )}
 
       <h1 className="mb-1 text-xl font-bold">Here's how that went</h1>

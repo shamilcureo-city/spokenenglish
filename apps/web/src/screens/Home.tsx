@@ -8,6 +8,8 @@ import {
 } from '@fluentmap/core/conversation';
 import { useStore, dateKey } from '../store';
 import { todayIndex } from '../lib/constants';
+import { shareInvite } from '../lib/share';
+import { track } from '../lib/analytics';
 import { Logo, GoalRing, Page } from './ui';
 
 export function Home({
@@ -30,6 +32,13 @@ export function Home({
   const next = nextLesson(completedLessonIds, placement?.unitId);
   const pct = courseProgress(completedLessonIds).pct;
   const warmup = warmupForDay(todayIndex());
+
+  function invite() {
+    void (async () => {
+      const result = await shareInvite(profile.name);
+      track('invite_sent', { result });
+    })();
+  }
 
   return (
     <Page>
@@ -120,13 +129,25 @@ export function Home({
       {/* Progress */}
       <button
         onClick={onProgress}
-        className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-left transition hover:border-emerald-400/40 hover:bg-white/[0.04]"
+        className="mb-3 flex w-full items-center justify-between rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-left transition hover:border-emerald-400/40 hover:bg-white/[0.04]"
       >
         <div>
           <div className="text-sm font-semibold">Your progress</div>
           <div className="text-xs text-white/45">Levels, streak & how you're improving</div>
         </div>
         <span className="text-white/35">→</span>
+      </button>
+
+      {/* Invite a friend — the "practise with me" growth loop */}
+      <button
+        onClick={invite}
+        className="flex w-full items-center justify-between rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.04] p-4 text-left transition hover:border-emerald-400/45 hover:bg-emerald-400/[0.08]"
+      >
+        <div>
+          <div className="text-sm font-semibold text-emerald-100">Practise with a friend 💬</div>
+          <div className="text-xs text-white/50">You'll both stick with it — invite them on WhatsApp</div>
+        </div>
+        <span className="text-emerald-300/70">↗</span>
       </button>
     </Page>
   );

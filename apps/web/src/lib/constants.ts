@@ -25,6 +25,12 @@ export const IDLE_MS = 30_000;
 /** Hard cap on a single live session (matches the orchestrator's 8-min recycle). */
 export const MAX_SESSION_SECONDS = 8 * 60;
 
+/**
+ * The public URL printed on the share card + invite message — the viral hook.
+ * Placeholder until we deploy (a later phase); centralised so it's a one-line swap.
+ */
+export const APP_SHARE_URL = 'https://speakwell.app';
+
 /** A whole-day index, so the daily warm-up rotates once per calendar day. */
 export function todayIndex(): number {
   const now = new Date();

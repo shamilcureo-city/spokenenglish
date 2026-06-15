@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { COACH_NAME } from '@fluentmap/core/conversation';
 import { useStore } from '../store';
 import { LANGUAGES } from '../lib/constants';
 import { track } from '../lib/analytics';
@@ -32,8 +33,9 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
 
       <h1 className="text-2xl font-bold leading-tight">Speak English with confidence.</h1>
       <p className="mt-2 text-sm text-white/55">
-        A spoken-English course you finish by <span className="text-white/80">talking</span> — short lessons,
-        a friendly AI partner, and feedback in your own language. Five minutes a day.
+        A spoken-English course you finish by <span className="text-white/80">talking</span> — short lessons
+        with <span className="text-emerald-200">{COACH_NAME}</span>, your friendly speaking partner, and
+        feedback in your own language. Five minutes a day.
       </p>
 
       <div className="mt-7 space-y-5">

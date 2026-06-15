@@ -71,7 +71,7 @@ export function dateKey(d = new Date()): string {
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
-function shiftKey(daysAgo: number): string {
+export function shiftKey(daysAgo: number): string {
   const d = new Date();
   d.setDate(d.getDate() - daysAgo);
   return dateKey(d);

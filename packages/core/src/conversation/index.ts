@@ -4,6 +4,7 @@
  */
 export * from './types.js';
 export * from './gemini.js';
+export * from './coach.js';
 export * from './persona.js';
 export * from './recap.js';
 export * from './warmups.js';
