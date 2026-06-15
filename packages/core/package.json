@@ -8,10 +8,8 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
-    "./science": { "types": "./dist/science/index.d.ts", "default": "./dist/science/index.js" },
     "./voice": { "types": "./dist/voice/orchestrator.d.ts", "default": "./dist/voice/orchestrator.js" },
-    "./scoring": { "types": "./dist/scoring/index.d.ts", "default": "./dist/scoring/index.js" },
-    "./domain": { "types": "./dist/domain/index.d.ts", "default": "./dist/domain/index.js" }
+    "./conversation": { "types": "./dist/conversation/index.d.ts", "default": "./dist/conversation/index.js" }
   },
   "files": ["dist"],
   "scripts": {

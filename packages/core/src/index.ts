@@ -1,8 +1,7 @@
 /**
- * @fluentmap/core — shared learning-science engine + voice orchestration.
- * Pure, platform-agnostic TypeScript consumed by web, native, and edge functions.
+ * @fluentmap/core — the Greenroom engine: live-voice orchestration + the
+ * conversation engine (persona, scene building, recap, warm-ups). Pure,
+ * platform-agnostic TypeScript consumed by the web app and the local server.
  */
-export * as science from './science/index.js';
 export * as voice from './voice/orchestrator.js';
-export * as scoring from './scoring/index.js';
-export * as domain from './domain/index.js';
+export * as conversation from './conversation/index.js';

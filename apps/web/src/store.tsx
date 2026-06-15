@@ -1,287 +1,189 @@
 /**
- * App store. Two modes:
- *  - local  (Supabase unconfigured): localStorage + demo skill states.
- *  - cloud  (signed in): hydrate profile + skill_states from Postgres, persist
- *    the assessment and every session's evidence (closes the learning loop).
+ * Speakwell store — local-only (no Supabase). Profile, placement, lessons done +
+ * their best stars, XP, recap history, the days you practised (for the HUMANE
+ * streak), and a weekly goal. Persisted to localStorage.
  */
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { Placement, SpeakSubScores } from '@fluentmap/core/domain';
 import {
-  applyReview,
-  newSkillState,
-  intervalDaysOf,
-  type IngestResult,
-  type Rating,
-  type ReviewItem,
-  type SkillState,
-} from '@fluentmap/core/science';
-import {
-  type Reminder,
-  type Usage,
-  addUsageMinutes,
-  defaultReminder,
-  normalizeUsageForToday,
-  toDateKey,
-} from '@fluentmap/core/domain';
-import { buildDemoStates, buildDemoReviews, DEMO_NOW } from './mock/learner';
-import * as repos from './data/repos';
-
-export type Stage = 'onboarding' | 'assessment' | 'result' | 'app';
+  humaneStreak,
+  WARMUP_XP,
+  type ConversationMode,
+  type LessonScore,
+  type Placement,
+  type Recap,
+} from '@fluentmap/core/conversation';
 
 export interface Profile {
   name: string;
+  /** Mother tongue, for the recap explanations. */
   l1: string;
-  goal: string;
 }
 
-export interface AssessmentResult {
-  placement: Placement;
-  subScores: SpeakSubScores;
-  summary: string;
-  strengths: string[];
-  focusAreas: string[];
-  takenAt: string;
+export interface SavedRecap {
+  id: string;
+  at: string;
+  mode: ConversationMode;
+  title: string;
+  recap: Recap;
 }
 
-interface AppState {
-  stage: Stage;
+interface Persisted {
   profile: Profile;
-  assessment: AssessmentResult | null;
-  trackId: string | null;
-  plan: string;
-  usage: Usage;
-  reminder: Reminder;
+  onboarded: boolean;
+  placement: Placement | null;
+  completedLessonIds: string[];
+  /** Best stars earned per lesson id. */
+  lessonStars: Record<string, number>;
+  xp: number;
+  recaps: SavedRecap[];
+  /** yyyy-mm-dd local dates the user practised. */
+  days: string[];
+  weeklyGoal: number;
+  /** Implementation-intention: the daily practice time the user picked (HH:MM), if any. */
+  reminderTime: string | null;
+  /** COGS metering: live realtime voice seconds used today (reset daily). */
+  liveSecondsToday: number;
+  liveDate: string;
 }
 
-const DEFAULT: AppState = {
-  stage: 'onboarding',
-  profile: { name: '', l1: 'Hindi', goal: 'Daily English' },
-  assessment: null,
-  trackId: null,
-  plan: 'Free',
-  usage: { date: '1970-01-01', usedMinutes: 0 },
-  reminder: defaultReminder,
+const DEFAULT: Persisted = {
+  profile: { name: '', l1: 'Hindi' },
+  onboarded: false,
+  placement: null,
+  completedLessonIds: [],
+  lessonStars: {},
+  xp: 0,
+  recaps: [],
+  days: [],
+  weeklyGoal: 5,
+  reminderTime: null,
+  liveSecondsToday: 0,
+  liveDate: '1970-01-01',
 };
 
-const KEY = 'fluentmap-state-v1';
+const KEY = 'speakwell-state-v1';
 
-function loadLocal(): AppState {
+/* ── date helpers (local) ── */
+export function dateKey(d = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+function shiftKey(daysAgo: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  return dateKey(d);
+}
+export function countLast7(days: string[]): number {
+  const recent = new Set<string>();
+  for (let i = 0; i < 7; i++) recent.add(shiftKey(i));
+  return days.filter((d) => recent.has(d)).length;
+}
+
+function uid(): string {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    return `id-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+  }
+}
+
+function load(): Persisted {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? { ...DEFAULT, ...(JSON.parse(raw) as Partial<AppState>) } : DEFAULT;
+    return raw ? { ...DEFAULT, ...(JSON.parse(raw) as Partial<Persisted>) } : DEFAULT;
   } catch {
     return DEFAULT;
   }
 }
 
-function mergeStates(prev: SkillState[], updated: SkillState[]): SkillState[] {
-  const map = new Map(prev.map((s) => [s.skillId, s]));
-  for (const u of updated) map.set(u.skillId, u);
-  return [...map.values()];
-}
-
-interface Store extends AppState {
-  userId: string | null;
-  cloud: boolean;
-  hydrating: boolean;
-  skillStates: SkillState[];
-  reviewItems: ReviewItem[];
+interface Store extends Persisted {
   streak: number;
-  reviewsDone: number;
-  plan: string;
-  usage: Usage;
-  reminder: Reminder;
-  now: Date;
+  weekProgress: number;
   setProfile(p: Partial<Profile>): void;
-  gradeReview(item: ReviewItem, rating: Rating): void;
-  setPlan(name: string): void;
-  addUsage(minutes: number): void;
-  setReminder(r: Reminder): void;
-  practiceSkill(skillId: string, rating: Rating): void;
-  startAssessment(): void;
-  saveAssessment(r: AssessmentResult): void;
-  enroll(): void;
-  applyEvidence(ingest: IngestResult): void;
+  completeOnboarding(p: Profile & { reminderTime?: string | null }): void;
+  setPlacement(p: Placement | null): void;
+  /** Finish a lesson: mark complete, record best stars, add XP, count today. */
+  finishLesson(lessonId: string, score: LessonScore): void;
+  /** A daily free-talk: small XP + counts today. */
+  recordWarmup(): void;
+  addRecap(entry: { mode: ConversationMode; title: string; recap: Recap }): void;
+  markPracticed(): void;
+  setWeeklyGoal(n: number): void;
+  setReminderTime(t: string | null): void;
+  /** Live voice seconds used today (reset-aware). */
+  liveSecondsUsedToday: number;
+  recordLiveSeconds(seconds: number): void;
   reset(): void;
-  signOut?: () => Promise<void>;
 }
 
 const Ctx = createContext<Store | null>(null);
 
-export function StoreProvider({
-  userId,
-  cloud,
-  signOut,
-  children,
-}: {
-  userId: string | null;
-  cloud: boolean;
-  signOut?: () => Promise<void>;
-  children: ReactNode;
-}) {
-  const [state, setState] = useState<AppState>(() => (cloud ? DEFAULT : loadLocal()));
-  const [skillStates, setSkillStates] = useState<SkillState[]>(() => (cloud ? [] : buildDemoStates()));
-  const [reviewItems, setReviewItems] = useState<ReviewItem[]>(() =>
-    cloud ? [] : buildDemoReviews(loadLocal().profile.l1),
-  );
-  const [streak, setStreak] = useState<number>(() => (cloud ? 0 : 6));
-  const [reviewsDone, setReviewsDone] = useState(0);
-  const [hydrating, setHydrating] = useState(cloud);
-  const now = useMemo(() => (cloud ? new Date() : DEMO_NOW), [cloud]);
+export function StoreProvider({ children }: { children: ReactNode }) {
+  const [state, setState] = useState<Persisted>(load);
 
-  // Local persistence.
   useEffect(() => {
-    if (cloud) return;
     try {
       localStorage.setItem(KEY, JSON.stringify(state));
     } catch {
       /* ignore */
     }
-  }, [state, cloud]);
+  }, [state]);
 
-  // Cloud hydrate.
-  useEffect(() => {
-    if (!cloud || !userId) return;
-    let active = true;
-    void (async () => {
-      try {
-        const [profileRow, states, reviews] = await Promise.all([
-          repos.getProfile(userId),
-          repos.loadSkillStates(userId),
-          repos.loadDueReviewItems(userId),
-        ]);
-        if (!active) return;
-        setSkillStates(states);
-        setReviewItems(reviews);
-        setStreak(profileRow?.streak ?? 0);
-        setState((s) =>
-          profileRow
-            ? {
-                ...s,
-                profile: {
-                  name: profileRow.name ?? 'Learner',
-                  l1: profileRow.l1,
-                  goal: profileRow.goal ?? 'Daily English',
-                },
-                stage: 'app',
-              }
-            : { ...s, stage: 'onboarding' },
-        );
-      } catch (e) {
-        console.error('Hydrate failed', e);
-      } finally {
-        if (active) setHydrating(false);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [cloud, userId]);
+  const streak = useMemo(() => humaneStreak(state.days, shiftKey), [state.days]);
+  const weekProgress = useMemo(() => countLast7(state.days), [state.days]);
 
-  const todayKey = toDateKey(now);
-  const normalizedUsage = normalizeUsageForToday(state.usage, todayKey);
+  const withToday = (s: Persisted): string[] => {
+    const today = dateKey();
+    return s.days.includes(today) ? s.days : [...s.days, today];
+  };
+
+  const liveSecondsUsedToday = state.liveDate === dateKey() ? state.liveSecondsToday : 0;
 
   const store: Store = {
     ...state,
-    userId,
-    cloud,
-    hydrating,
-    skillStates,
-    reviewItems,
     streak,
-    reviewsDone,
-    usage: normalizedUsage,
-    now,
+    weekProgress,
+    liveSecondsUsedToday,
     setProfile: (p) => setState((s) => ({ ...s, profile: { ...s.profile, ...p } })),
-    setPlan: (name) => setState((s) => ({ ...s, plan: name })),
-    addUsage: (minutes) =>
-      setState((s) => ({ ...s, usage: addUsageMinutes(s.usage, minutes, todayKey) })),
-    setReminder: (r) => setState((s) => ({ ...s, reminder: r })),
-    practiceSkill: (skillId, rating) => {
-      const prior =
-        skillStates.find((s) => s.skillId === skillId) ??
-        newSkillState(userId ?? 'demo', skillId, now);
-      const updated = applyReview(prior, rating, now);
-      setSkillStates((prev) => mergeStates(prev, [updated]));
-      if (cloud) void repos.upsertSkillStates([updated]).catch(console.error);
-    },
-    startAssessment: () => setState((s) => ({ ...s, stage: 'assessment' })),
-    saveAssessment: (r) => {
-      setState((s) => ({ ...s, assessment: r, stage: 'result' }));
-      if (cloud && userId) {
-        void repos
-          .upsertProfile({
-            id: userId,
-            name: state.profile.name,
-            l1: state.profile.l1,
-            goal: state.profile.goal,
-            target_cefr: r.placement.band,
-          })
-          .catch(console.error);
-        void repos
-          .insertAssessment({
-            user_id: userId,
-            speak_score: r.placement.speakScore,
-            band: r.placement.band,
-            sub_scores: r.subScores,
-            placement: r.placement,
-            summary: r.summary,
-            strengths: r.strengths,
-            focus_areas: r.focusAreas,
-            taken_at: r.takenAt,
-          })
-          .catch(console.error);
-      }
-    },
-    enroll: () =>
-      setState((s) => ({ ...s, trackId: s.assessment?.placement.track ?? 'basic', stage: 'app' })),
-    applyEvidence: (ingest) => {
-      setSkillStates((prev) => mergeStates(prev, ingest.updatedStates));
-      setReviewItems((prev) => [...prev, ...ingest.newReviewItems]);
-      if (cloud) {
-        void repos.upsertSkillStates(ingest.updatedStates).catch(console.error);
-        void repos.insertReviewItems(ingest.newReviewItems).catch(console.error);
-        void repos.insertCorrections(ingest.corrections).catch(console.error);
-      }
-    },
-    gradeReview: (item, rating) => {
-      setReviewsDone((n) => n + 1);
-      const prior =
-        skillStates.find((s) => s.skillId === item.skillId) ??
-        newSkillState(userId ?? 'demo', item.skillId, now);
-      const updated = applyReview(prior, rating, now);
-      setSkillStates((prev) => mergeStates(prev, [updated]));
-
-      if (rating >= 3) {
-        // graduated this specific correction
-        setReviewItems((prev) => prev.filter((r) => r.id !== item.id));
-        if (cloud) void repos.deleteReviewItem(item.id).catch(console.error);
-      } else {
-        const next: ReviewItem = {
-          ...item,
-          reps: item.reps + 1,
-          lapses: item.lapses + (rating === 1 ? 1 : 0),
-          dueAt: updated.dueAt ?? item.dueAt,
-          intervalDays: intervalDaysOf(updated.stability),
-        };
-        setReviewItems((prev) => prev.map((r) => (r.id === item.id ? next : r)));
-        if (cloud) void repos.updateReviewItem(next).catch(console.error);
-      }
-      if (cloud) void repos.upsertSkillStates([updated]).catch(console.error);
-    },
+    completeOnboarding: ({ reminderTime, ...p }) =>
+      setState((s) => ({ ...s, profile: p, onboarded: true, reminderTime: reminderTime ?? s.reminderTime })),
+    setPlacement: (p) => setState((s) => ({ ...s, placement: p })),
+    finishLesson: (lessonId, score) =>
+      setState((s) => ({
+        ...s,
+        completedLessonIds: s.completedLessonIds.includes(lessonId)
+          ? s.completedLessonIds
+          : [...s.completedLessonIds, lessonId],
+        lessonStars: { ...s.lessonStars, [lessonId]: Math.max(s.lessonStars[lessonId] ?? 0, score.stars) },
+        xp: s.xp + score.xp,
+        days: withToday(s),
+      })),
+    recordWarmup: () => setState((s) => ({ ...s, xp: s.xp + WARMUP_XP, days: withToday(s) })),
+    addRecap: (entry) =>
+      setState((s) => ({
+        ...s,
+        recaps: [{ id: uid(), at: new Date().toISOString(), ...entry }, ...s.recaps].slice(0, 100),
+      })),
+    markPracticed: () => setState((s) => ({ ...s, days: withToday(s) })),
+    setWeeklyGoal: (n) => setState((s) => ({ ...s, weeklyGoal: Math.max(1, Math.min(7, Math.round(n))) })),
+    setReminderTime: (t) => setState((s) => ({ ...s, reminderTime: t })),
+    recordLiveSeconds: (seconds) =>
+      setState((s) => {
+        const today = dateKey();
+        const base = s.liveDate === today ? s.liveSecondsToday : 0;
+        return { ...s, liveDate: today, liveSecondsToday: base + Math.max(0, Math.round(seconds)) };
+      }),
     reset: () => {
       setState(DEFAULT);
-      if (!cloud) {
-        try {
-          localStorage.removeItem(KEY);
-        } catch {
-          /* ignore */
-        }
+      try {
+        localStorage.removeItem(KEY);
+      } catch {
+        /* ignore */
       }
-      void signOut?.();
     },
-    signOut,
   };
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;

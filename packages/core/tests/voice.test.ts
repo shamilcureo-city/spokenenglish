@@ -7,6 +7,7 @@ import {
   AUDIO,
   buildSetupMessage,
   buildRealtimeInputMessage,
+  buildClientContentTurn,
   parseServerMessage,
   GeminiLiveOrchestrator,
   type AudioBridge,
@@ -18,7 +19,7 @@ import {
 
 test('GEMINI_SETUP matches the preserved configuration byte-for-byte', () => {
   assert.deepEqual(GEMINI_SETUP, {
-    model: 'models/gemini-2.5-flash-native-audio-latest',
+    model: 'models/gemini-3.1-flash-live-preview',
     generation_config: {
       response_modalities: ['AUDIO'],
       speech_config: {
@@ -32,16 +33,17 @@ test('GEMINI_SETUP matches the preserved configuration byte-for-byte', () => {
         disabled: false,
         start_of_speech_sensitivity: 'START_SENSITIVITY_HIGH',
         end_of_speech_sensitivity: 'END_SENSITIVITY_LOW',
-        silence_duration_ms: 400,
+        silence_duration_ms: 800,
       },
     },
     input_audio_transcription: {},
     output_audio_transcription: {},
+    session_resumption: {},
   });
 });
 
 test('preserved audio constants (PCM16, 16 kHz in / 24 kHz out)', () => {
-  assert.equal(GEMINI_MODEL_LIVE, 'models/gemini-2.5-flash-native-audio-latest');
+  assert.equal(GEMINI_MODEL_LIVE, 'models/gemini-3.1-flash-live-preview');
   assert.equal(VOICE_NAME, 'Puck');
   assert.equal(AUDIO.inputSampleRate, 16000);
   assert.equal(AUDIO.outputSampleRate, 24000);
@@ -58,9 +60,9 @@ test('buildSetupMessage injects system_instruction and preserves the frozen setu
   assert.deepEqual(msg.setup.realtime_input_config, GEMINI_SETUP.realtime_input_config);
 });
 
-test('buildRealtimeInputMessage frames a PCM chunk correctly', () => {
+test('buildRealtimeInputMessage uses realtime_input.audio (not the deprecated media_chunks)', () => {
   assert.deepEqual(buildRealtimeInputMessage('BASE64'), {
-    realtimeInput: { mediaChunks: [{ mimeType: 'audio/pcm;rate=16000', data: 'BASE64' }] },
+    realtime_input: { audio: { mime_type: 'audio/pcm;rate=16000', data: 'BASE64' } },
   });
 });
 
@@ -77,11 +79,18 @@ test('parseServerMessage: audio part → audio event', () => {
   assert.deepEqual(evts, [{ type: 'audio', data: 'AUD' }]);
 });
 
-test('parseServerMessage: both transcription field variants are handled', () => {
-  const camel = parseServerMessage({ serverContent: { inputTranscription: { text: ' hi ' } } });
-  assert.deepEqual(camel, [{ type: 'transcript', speaker: 'learner', text: 'hi' }]);
+test('parseServerMessage: transcription variants are emitted VERBATIM (spaces preserved)', () => {
+  const camel = parseServerMessage({ serverContent: { inputTranscription: { text: 'great ' } } });
+  assert.deepEqual(camel, [{ type: 'transcript', speaker: 'learner', text: 'great ' }]);
   const snake = parseServerMessage({ serverContent: { output_transcription: { text: 'yo' } } });
   assert.deepEqual(snake, [{ type: 'transcript', speaker: 'ai', text: 'yo' }]);
+});
+
+test('parseServerMessage: resumption handle and goAway', () => {
+  assert.deepEqual(parseServerMessage({ sessionResumptionUpdate: { newHandle: 'H1', resumable: true } }), [
+    { type: 'resumption_handle', handle: 'H1' },
+  ]);
+  assert.deepEqual(parseServerMessage({ goAway: { timeLeft: '5s' } }), [{ type: 'go_away' }]);
 });
 
 test('parseServerMessage: combined message yields ordered events', () => {
@@ -221,25 +230,32 @@ test('orchestrator surfaces API errors and closes the socket', async () => {
   assert.ok(socket.closed);
 });
 
-test('orchestrator surfaces a mic-capture failure as an error and closes', async () => {
+test('orchestrator keeps the session alive on mic failure (text fallback) and still starts the AI', async () => {
   const socket = new FakeSocket();
   const audio = new FakeAudio();
   audio.startCapture = () => {
     throw new Error('Microphone access denied');
   };
+  let micErr = '';
   const orch = new GeminiLiveOrchestrator({
     resolveWsUrl: async () => 'wss://x',
     createSocket: () => socket,
     audio,
     systemInstruction: 's',
+    callbacks: { onMicError: (m) => (micErr = m) },
   });
   await orch.start();
   socket.open();
   socket.emit({ setupComplete: true });
   await Promise.resolve();
   await Promise.resolve();
-  assert.ok(orch.status.startsWith('error'), `expected error, got ${orch.status}`);
-  assert.ok(socket.closed);
+  assert.equal(orch.status, 'listening'); // session continues, not torn down
+  assert.equal(socket.closed, false);
+  assert.match(micErr, /Microphone/);
+  assert.ok(
+    socket.sent.some((s) => s.includes('clientContent')),
+    'the opening trigger should still be sent',
+  );
 });
 
 test('orchestrator reports a token/connect failure as an error status', async () => {
@@ -256,4 +272,47 @@ test('orchestrator reports a token/connect failure as an error status', async ()
   });
   await orch.start();
   assert.equal(orch.status, 'error: no token');
+});
+
+test('buildClientContentTurn frames a user text turn', () => {
+  assert.deepEqual(buildClientContentTurn('hi'), {
+    clientContent: { turns: [{ role: 'user', parts: [{ text: 'hi' }] }], turnComplete: true },
+  });
+});
+
+test('orchestrator sends an opening trigger on setup so the AI speaks first', async () => {
+  const socket = new FakeSocket();
+  const audio = new FakeAudio();
+  const orch = new GeminiLiveOrchestrator({
+    resolveWsUrl: async () => 'wss://x',
+    createSocket: () => socket,
+    audio,
+    systemInstruction: 's',
+  });
+  await orch.start();
+  socket.open();
+  socket.emit({ setupComplete: true });
+  await Promise.resolve();
+  const trigger = socket.sent.map((s) => JSON.parse(s)).find((m) => m.clientContent);
+  assert.ok(trigger, 'an opening clientContent turn should be sent');
+  assert.equal(trigger.clientContent.turnComplete, true);
+});
+
+test('sendText surfaces a learner turn and sends it over the socket', async () => {
+  const socket = new FakeSocket();
+  const audio = new FakeAudio();
+  const transcripts: { speaker: string; text: string }[] = [];
+  const orch = new GeminiLiveOrchestrator({
+    resolveWsUrl: async () => 'wss://x',
+    createSocket: () => socket,
+    audio,
+    systemInstruction: 's',
+    callbacks: { onTranscript: (t) => transcripts.push(t) },
+  });
+  await orch.start();
+  socket.open();
+  orch.sendText('  I disagree  ');
+  assert.deepEqual(transcripts.at(-1), { speaker: 'learner', text: 'I disagree' });
+  const last = JSON.parse(socket.sent.at(-1)!);
+  assert.deepEqual(last.clientContent.turns[0].parts[0], { text: 'I disagree' });
 });

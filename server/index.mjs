@@ -1,12 +1,11 @@
-// FluentMap local dev API — a tiny, dependency-light stand-in for the Supabase
-// edge functions, so you get the REAL Gemini voice + scoring with NO Docker and
-// NO Supabase. It reuses the exact same @fluentmap/core logic the edge functions
-// use (prompts, validation, contrastive pre-filter, assembly), so behaviour is
-// identical — only the token store (in-memory Map instead of the live_tokens
-// table) and the skill list (from core instead of Postgres) differ.
+// Greenroom local dev API — a tiny, dependency-light stand-in for a cloud backend,
+// so you get the REAL Gemini voice + scene-building + recaps with NO Docker and NO
+// Supabase. It reuses the exact same @fluentmap/core/conversation logic the app uses
+// (prompts, parsing), so behaviour is identical — only the token store (an in-memory
+// Map) differs.
 //
 // Run:  npm run dev:api        (reads GEMINI_API_KEY from env or a .env file)
-// Then point the web app at it:  apps/web/.env → VITE_FUNCTIONS_URL=http://localhost:8787
+// The web app points at it via apps/web/.env → VITE_FUNCTIONS_URL=http://localhost:8787
 
 import express from 'express';
 import cors from 'cors';
@@ -16,17 +15,16 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import {
-  buildAssessmentPrompt,
-  validateAssessmentScore,
-  ASSESSMENT_TEMPERATURE,
-  buildSessionScoringPrompt,
-  assembleScoredSession,
+  buildRecapPrompt,
+  parseRecap,
+  buildPlacementPrompt,
+  parsePlacement,
   buildGenerateContentBody,
   geminiRestUrl,
   extractText,
   parseJsonResponse,
-} from '@fluentmap/core/scoring';
-import { candidateRules, SKILLS } from '@fluentmap/core/science';
+  RECAP_TEMPERATURE,
+} from '@fluentmap/core/conversation';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..'); // fluentmap/
@@ -71,7 +69,7 @@ function loadGeminiKey() {
   for (const p of candidates) {
     const k = parseEnvKey(p, 'GEMINI_API_KEY');
     if (k && !PLACEHOLDERS.has(k)) {
-      console.log(`[fluentmap-api] Gemini key loaded from ${p.replace(ROOT, '.')}`);
+      console.log(`[greenroom-api] Gemini key loaded from ${p.replace(ROOT, '.')}`);
       return k;
     }
   }
@@ -80,7 +78,7 @@ function loadGeminiKey() {
 
 const GEMINI_API_KEY = loadGeminiKey();
 
-// ── Gemini REST caller (same helpers as the edge functions) ─────────────────
+// ── Gemini REST caller (same pure helpers as the core) ──────────────────────
 async function callGeminiJson(prompt, opts = {}) {
   if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not set on the dev server.');
   const res = await fetch(geminiRestUrl(GEMINI_API_KEY), {
@@ -104,9 +102,9 @@ app.use(express.json({ limit: '2mb' }));
 
 app.get('/', (_req, res) => {
   res.json({
-    service: 'fluentmap-dev-api',
+    service: 'speakwell-dev-api',
     geminiKey: GEMINI_API_KEY ? 'loaded' : 'MISSING',
-    routes: ['/start-session', '/redeem-session', '/score-assessment', '/score-session'],
+    routes: ['/start-session', '/redeem-session', '/recap', '/placement'],
   });
 });
 
@@ -129,55 +127,46 @@ app.get('/redeem-session', (req, res) => {
   res.json({ wsUrl: entry.wsUrl });
 });
 
-// POST /score-assessment  { transcript, supportLanguage } → AssessmentScore
-app.post('/score-assessment', async (req, res) => {
-  const { transcript, supportLanguage } = req.body ?? {};
+// POST /recap  { transcript, mode, supportLanguage, scene?, lesson? } → Recap
+app.post('/recap', async (req, res) => {
+  const { transcript, mode, supportLanguage, lesson } = req.body ?? {};
   if (!Array.isArray(transcript) || transcript.length === 0) {
     return res.status(400).json({ error: 'A valid transcript array is required.' });
   }
   try {
-    const prompt = buildAssessmentPrompt({
+    const prompt = buildRecapPrompt({
       transcript,
-      supportLanguage: typeof supportLanguage === 'string' ? supportLanguage : undefined,
+      mode: mode === 'lesson' ? 'lesson' : 'warmup',
+      supportLanguage: typeof supportLanguage === 'string' ? supportLanguage : 'Hindi',
+      lesson: lesson && typeof lesson === 'object' ? lesson : undefined,
     });
-    const raw = await callGeminiJson(prompt, { temperature: ASSESSMENT_TEMPERATURE });
-    res.json(validateAssessmentScore(raw));
+    const raw = await callGeminiJson(prompt, { temperature: RECAP_TEMPERATURE });
+    res.json(parseRecap(raw));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// POST /score-session  { sessionId, userId, l1, lessonTitle?, transcript } → AssembledSession
-app.post('/score-session', async (req, res) => {
-  const { sessionId, userId, l1, lessonTitle, transcript } = req.body ?? {};
+// POST /placement  { transcript, supportLanguage } → { levelId, unitId, summary }
+app.post('/placement', async (req, res) => {
+  const { transcript, supportLanguage } = req.body ?? {};
   if (!Array.isArray(transcript) || transcript.length === 0) {
     return res.status(400).json({ error: 'A valid transcript array is required.' });
   }
-  if (typeof sessionId !== 'string' || typeof userId !== 'string' || typeof l1 !== 'string') {
-    return res.status(400).json({ error: 'sessionId, userId and l1 are required.' });
-  }
   try {
-    const learnerText = transcript
-      .filter((t) => t.speaker === 'learner')
-      .map((t) => t.text)
-      .join('\n');
-    const cands = candidateRules(learnerText, l1).map((r) => ({ id: r.id, title: r.title }));
-    const prompt = buildSessionScoringPrompt({
+    const prompt = buildPlacementPrompt({
       transcript,
-      l1,
-      skills: SKILLS.map((s) => ({ id: s.id, label: s.label })),
-      candidateRules: cands,
-      ...(typeof lessonTitle === 'string' ? { lessonTitle } : {}),
+      supportLanguage: typeof supportLanguage === 'string' ? supportLanguage : 'Hindi',
     });
-    const raw = await callGeminiJson(prompt);
-    res.json(assembleScoredSession(raw, { sessionId, userId, l1 }));
+    const raw = await callGeminiJson(prompt, { temperature: 0.2 });
+    res.json(parsePlacement(raw));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`\n  FluentMap dev API → http://localhost:${PORT}`);
+  console.log(`\n  Greenroom dev API → http://localhost:${PORT}`);
   console.log(`  Gemini key: ${GEMINI_API_KEY ? '✅ loaded' : '❌ MISSING (set GEMINI_API_KEY)'}`);
   console.log(`  Point the web app at it: apps/web/.env → VITE_FUNCTIONS_URL=http://localhost:${PORT}\n`);
 });

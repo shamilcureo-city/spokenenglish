@@ -24,5 +24,8 @@
     "seeds": "tsx scripts/gen-seeds.ts",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "ws": "^8.21.0"
   }
 }

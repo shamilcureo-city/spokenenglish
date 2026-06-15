@@ -1,35 +1,88 @@
-import { AuthGate } from './auth/AuthGate';
+import { useEffect, useState } from 'react';
+import type { Lesson, Turn } from '@fluentmap/core/conversation';
 import { StoreProvider, useStore } from './store';
-import { Onboarding } from './onboarding/Onboarding';
-import { AssessmentFlow } from './onboarding/AssessmentFlow';
-import { AssessmentResult } from './onboarding/AssessmentResult';
-import { MainApp } from './MainApp';
+import { track } from './lib/analytics';
+import { Onboarding } from './screens/Onboarding';
+import { PlacementScreen } from './screens/PlacementScreen';
+import { Home } from './screens/Home';
+import { CourseScreen } from './screens/CourseScreen';
+import { LessonScreen } from './screens/LessonScreen';
+import { ConversationScreen } from './screens/ConversationScreen';
+import { RecapScreen } from './screens/RecapScreen';
+import { ProgressScreen } from './screens/ProgressScreen';
+import { Settings } from './screens/Settings';
 
-function Routed() {
-  const { stage, hydrating } = useStore();
-  if (hydrating) {
-    return <div className="grid min-h-screen place-items-center text-sm text-white/40">Loading your map…</div>;
+type Route =
+  | { name: 'home' }
+  | { name: 'course' }
+  | { name: 'lesson'; lesson: Lesson }
+  | { name: 'warmup'; prompt: string }
+  | { name: 'warmupRecap'; transcript: Turn[] }
+  | { name: 'placement' }
+  | { name: 'progress' }
+  | { name: 'settings' };
+
+function Shell() {
+  const { onboarded } = useStore();
+  const [route, setRoute] = useState<Route>({ name: 'home' });
+  const home = () => setRoute({ name: 'home' });
+
+  useEffect(() => {
+    track('app_open');
+  }, []);
+
+  if (!onboarded) {
+    return <Onboarding onDone={() => setRoute({ name: 'placement' })} />;
   }
-  switch (stage) {
-    case 'onboarding':
-      return <Onboarding />;
-    case 'assessment':
-      return <AssessmentFlow />;
-    case 'result':
-      return <AssessmentResult />;
+
+  switch (route.name) {
+    case 'placement':
+      return <PlacementScreen onDone={home} />;
+    case 'course':
+      return (
+        <CourseScreen onBack={home} onOpenLesson={(lesson) => setRoute({ name: 'lesson', lesson })} />
+      );
+    case 'lesson':
+      return (
+        <LessonScreen
+          lesson={route.lesson}
+          onExit={() => setRoute({ name: 'course' })}
+          onNext={() => setRoute({ name: 'course' })}
+        />
+      );
+    case 'warmup':
+      return (
+        <ConversationScreen
+          mode="warmup"
+          warmupPrompt={route.prompt}
+          onBack={home}
+          onEnd={(transcript) => setRoute({ name: 'warmupRecap', transcript })}
+        />
+      );
+    case 'warmupRecap':
+      return <RecapScreen transcript={route.transcript} mode="warmup" onDone={home} onRedo={home} />;
+    case 'progress':
+      return <ProgressScreen onBack={home} />;
+    case 'settings':
+      return <Settings onBack={home} />;
+    case 'home':
     default:
-      return <MainApp />;
+      return (
+        <Home
+          onOpenLesson={(lesson) => setRoute({ name: 'lesson', lesson })}
+          onBrowseCourse={() => setRoute({ name: 'course' })}
+          onWarmup={(prompt) => setRoute({ name: 'warmup', prompt })}
+          onProgress={() => setRoute({ name: 'progress' })}
+          onSettings={() => setRoute({ name: 'settings' })}
+        />
+      );
   }
 }
 
 export default function App() {
   return (
-    <AuthGate>
-      {(userId, cloud, signOut) => (
-        <StoreProvider userId={userId} cloud={cloud} signOut={signOut}>
-          <Routed />
-        </StoreProvider>
-      )}
-    </AuthGate>
+    <StoreProvider>
+      <Shell />
+    </StoreProvider>
   );
 }

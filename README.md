@@ -1,108 +1,71 @@
-# FluentMap
+# Speakwell
 
-A science-driven spoken-English platform for India. Greenfield rebuild of the SpeakSaathi prototype around a transparent, evidence-based learning engine — the differentiator and the marketing story ("see the science; watch your map fill in").
+**A spoken-English communication course you finish by talking.** Foundation →
+Intermediate → Advanced, organised around real communication skills (not grammar
+drills). Every lesson is **Learn → Speak → Feedback**: learn a few real phrases,
+practise them live with a warm AI voice partner, then get calm, confidence-first
+feedback (in your mother tongue when it helps). A quick spoken **placement** starts
+you at the right level; a 5-minute **daily free-talk** keeps the habit; **progress**
+fills in as you go.
 
-> **Run it:** `npm run setup && npm run dev` → http://localhost:5173 (demo mode, no config).
-> Real voice + accounts: see **[SETUP.md](SETUP.md)**.
+> **Run it (no Docker, no Supabase):**
+> ```bash
+> npm run setup            # install + build the engine
+> npm run dev:api          # terminal 1 — Gemini token-proxy + recap/placement (port 8787)
+> npm run dev              # terminal 2 — the web app
+> ```
+> Put a Google **Gemini API key** where the server can find it (`export GEMINI_API_KEY=…`,
+> or a `.env` file). Then open the app, allow the mic, and talk.
 >
-> Full architecture & roadmap: `~/.claude/plans/i-want-to-make-federated-waterfall.md`
+> Full product spec & PRDs: `~/.claude/plans/i-want-to-make-federated-waterfall.md`
 
-## Monorepo layout
+## Why
+
+Most learners can already read and write English — they **freeze when they open their
+mouth**. Speakwell makes you *speak in every lesson*: short, communicative units you
+practise out loud, with feedback that builds confidence instead of shame. For general
+learners, India-first (mother-tongue scaffolding built in).
+
+## The loop
 
 ```
-fluentmap/
-├─ packages/
-│  └─ core/          # ⭐ shared, pure TypeScript: the learning-science engine + voice orchestration
-├─ apps/
-│  └─ web/           # React 19 + Vite + Tailwind PWA — the /map "brain map" (runnable)
-├─ supabase/         # Postgres schema + generated seeds (edge functions: coming)
-└─ scripts/          # gen-seeds.ts — emits Supabase seeds from packages/core
+Placement (2-min spoken check) → your level
+  └─ Course path (Foundation → Intermediate → Advanced)
+       └─ Lesson: Learn (phrases) → Speak (live AI partner) → Feedback (recap) → next unlocks
+  └─ Daily free-talk (5-min warm-up)        └─ Progress (levels, streak, how you're improving)
 ```
 
-The whole point of the architecture: the science is written **once** in `packages/core` (pure, deterministic TS) and shared byte-for-byte by web, native, and edge functions.
+## Layout
 
-## What's built (Phase 1 — engine core)
+```
+speakwell/  (folder still named fluentmap)
+├─ packages/core/src/
+│  ├─ voice/orchestrator.ts     # ⭐ frozen Gemini Live config + session orchestration (+ barge-in)
+│  └─ conversation/             # ⭐ curriculum · persona · recap · placement · warm-ups (pure TS)
+├─ apps/web/src/
+│  ├─ screens/                  # Onboarding · Placement · Home · Course · Lesson · Recap · Progress · Settings
+│  ├─ voice/                    # web AudioBridge + the useGeminiLive hook
+│  ├─ store.tsx                 # tiny local-only store (localStorage)
+│  └─ lib/api.ts                # client for the local server
+└─ server/index.mjs             # local dev API: token proxy + /recap + /placement (no Supabase)
+```
 
-`packages/core/src/science/`
-
-| Module | Responsibility |
+| Core module | Responsibility |
 |---|---|
-| `types.ts` | All engine data types (skills, memory state, review items, transfer rules). |
-| `fsrs.ts` | **FSRS-5** forgetting-curve scheduler — `retrievability`, `nextInterval`, `schedule`. Pure, clock-injected. |
-| `mastery.ts` | Derives the live 0–1 mastery number = durability + accuracy + freshness, plus the lifecycle label and `applyReview`. |
-| `sequencer.ts` | Adaptive `pickNextActivity` — overdue reviews preempt, prerequisite gating, i+1 difficulty band, weakest-first. |
-| `contrastive.ts` + `l1-rules.ts` | The L1→L2 transfer engine + knowledge base (Hindi + Tamil seed). Tags an error with its likely mother-tongue cause and resolves the explanation in that language. |
-| `decompose.ts` | `ingestSessionEvidence` — folds a scored voice session into FSRS updates, a spaced-repetition review queue, and mother-tongue corrections. |
-
-`packages/core/src/voice/orchestrator.ts`
-
-- **Preserved Gemini configuration**, frozen and guarded by a test: `GEMINI_SETUP` (model `gemini-2.5-flash-native-audio-latest`, voice `Puck`, automatic activity detection), `AUDIO` (PCM16, 16 kHz in / 24 kHz out), and the message builders — lifted verbatim from the original app.
-- `GeminiLiveOrchestrator` — platform-agnostic session protocol (token proxy → WebSocket → setup → transcripts → status machine) with raw audio I/O delegated to an injected `AudioBridge`, so web (AudioWorklet) and native (PCM module) share one implementation.
-
-Everything is pure and deterministic — **128 unit tests, full typecheck**.
-
-### The map (`apps/web`)
-
-The marketing centerpiece: a React + Vite + Tailwind PWA whose `/map` "brain map"
-renders the FluentMap Score, CEFR coverage, the cluster-grouped skill map coloured
-by live mastery, the FSRS **forgetting-curve** sparkline, and the **mother-tongue
-(L1) patterns** card — all computed by `packages/core` from a demo learner that is
-itself generated by the real FSRS engine.
-
-It also has the full **first-run flow** — onboarding (name / goal / mother tongue)
-→ a 5-minute voice **assessment** (live examiner; or skip to a sample) → a CEFR
-**placement** (Speak Score, band, recommended track) → enroll → the map.
-
-"Practice" is **adaptive** — the sequencer picks your weakest, just-above-mastery
-skill and opens the lesson that teaches it (the reason is shown on screen). A
-**Reviews** flow drills your due spaced-repetition items (with the mother-tongue
-"why") and grades them — Again/Hard/Good/Easy — back onto the forgetting curve.
-
-It also has a live **Lesson** screen ("Practice"): the voice pipeline lifts your
-working `useGeminiLive`/`audio-processor` verbatim into a web `AudioBridge` driven
-by the shared core orchestrator, and Finish → `score-session` → an
-`ingestSessionEvidence` preview (skills practiced, mother-tongue corrections,
-reviews scheduled). Live voice needs the edge functions running + a mic.
-
-```bash
-cd apps/web && npm run dev      # http://localhost:5173
-```
-
-**Local vs cloud mode.** By default the app runs in **local mode** — demo data, no
-sign-in, nothing to configure. Set `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY`
-(see `apps/web/.env.example`) to switch on **phone-OTP auth + cloud persistence**:
-your profile, skill map, reviews, and corrections are saved to Postgres (RLS-scoped)
-and the map fills in from real session evidence across devices.
-
-### Data model (`supabase/`)
-
-- `migrations/0001_init.sql` — full schema: identity, the science tables
-  (`skill_states`, `review_items`), content, sessions/evidence, assessments,
-  commerce, B2B — with hot-path indexes and RLS (`auth.uid() = user_id`).
-- Seeds are **generated from `packages/core`** (`npx tsx scripts/gen-seeds.ts`):
-  121 skills, the L1-transfer KB, and 5 languages → `supabase/seed.sql`.
-- See `supabase/README.md` for local setup and deploy.
+| `voice/orchestrator.ts` | The preserved Gemini Live setup (model, voice "Puck", PCM formats, activity detection), the session state machine, and barge-in. Frozen — a test asserts it byte-for-byte. |
+| `conversation/curriculum.ts` | The course as **data**: 3 levels · 16 units · ~37 lessons + path helpers (`nextLesson`, `isLessonUnlocked`, `levelProgress`). New lessons ship without code. |
+| `conversation/persona.ts` | `buildPartnerPrompt` — the warm partner; in `lesson` mode it runs a lesson's scenario and draws out the target moves. Never corrects mid-talk. |
+| `conversation/recap.ts` | `buildRecapPrompt` + `parseRecap` — the confidence-first, lesson-aware feedback (wins, fixes, mother-tongue explanations). |
+| `conversation/placement.ts` | `buildPlacementPrompt` + `parsePlacement` — map a short spoken check to a starting level + unit. |
+| `conversation/warmups.ts` | The daily 5-minute free-talk topics. |
 
 ## Develop
 
 ```bash
-npm install          # workspace deps (tsx, typescript, @types/node)
-npm test             # run all workspace tests
-npm run typecheck    # tsc --noEmit across packages
-
-# just the core package:
-cd packages/core
-npm test
-npx tsc --noEmit
+npm test          # core unit tests (curriculum/persona/recap/placement + frozen voice config)
+npm run typecheck # tsc --noEmit across core + web
+npm run build:core
 ```
 
-Tests use Node's built-in test runner over TypeScript via `tsx`. Node ≥ 20.
-
-## What's next (rest of Phase 1)
-
-1. Port the existing pure domain modules (`assessment`, `curriculum`, `correction`, `localization`, …) + their tests into `packages/core`.
-2. ~~Supabase schema migrations + seeds~~ ✅ done.
-3. ~~Edge functions: token proxy + `score-assessment` + `score-session`~~ ✅ done (`supabase/functions/`; needs local Supabase + `GEMINI_API_KEY` to run).
-4. ~~`apps/web` PWA with the `/map` "brain map" surface~~ ✅ done (demo data; live data after Phase 2 accounts).
-
-Then Phase 2 (accounts/sync), 3 (regional depth), 4 (content CMS), 5 (native + payments).
+MVP is **local-only** — no accounts, no cloud. Your profile, placement, completed lessons,
+and history live in `localStorage`. Accounts + sync are a later phase (see the plan).

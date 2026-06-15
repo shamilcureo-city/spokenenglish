@@ -19,3 +19,29 @@ body {
     'Noto Sans Devanagari', 'Noto Sans Tamil', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(-10vh) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(110vh) rotate(720deg);
+    opacity: 0.9;
+  }
+}
+
+@keyframes pop-in {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}

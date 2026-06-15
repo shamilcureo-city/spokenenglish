@@ -7,14 +7,17 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { GeminiLiveOrchestrator, type LiveStatus } from '@fluentmap/core/voice';
+import type { Turn } from '@fluentmap/core/conversation';
 import { createWebAudioBridge } from './audioBridge';
 import { createWebSocketAdapter } from './socket';
-import { resolveWsUrl, type Turn } from '../lib/api';
+import { resolveWsUrl } from '../lib/api';
 
 function mergeTurn(prev: Turn[], turn: { speaker: 'learner' | 'ai'; text: string }): Turn[] {
   const last = prev[prev.length - 1];
   if (last && last.speaker === turn.speaker) {
-    return [...prev.slice(0, -1), { speaker: last.speaker, text: `${last.text} ${turn.text}`.trim() }];
+    // Append fragments VERBATIM — they carry their own spaces; a separator would
+    // split words at chunk boundaries ("pro je c t").
+    return [...prev.slice(0, -1), { speaker: last.speaker, text: last.text + turn.text }];
   }
   return [...prev, { speaker: turn.speaker, text: turn.text }];
 }
@@ -24,8 +27,10 @@ export interface UseGeminiLive {
   transcript: Turn[];
   elapsed: number;
   analyser: AnalyserNode | null;
+  micBlocked: boolean;
   start: () => Promise<void>;
   stop: () => void;
+  sendText: (text: string) => void;
 }
 
 export function useGeminiLive(systemInstruction: string): UseGeminiLive {
@@ -33,6 +38,7 @@ export function useGeminiLive(systemInstruction: string): UseGeminiLive {
   const [transcript, setTranscript] = useState<Turn[]>([]);
   const [elapsed, setElapsed] = useState(0);
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
+  const [micBlocked, setMicBlocked] = useState(false);
 
   const orchRef = useRef<GeminiLiveOrchestrator | null>(null);
   const startedAtRef = useRef<number | null>(null);
@@ -56,6 +62,7 @@ export function useGeminiLive(systemInstruction: string): UseGeminiLive {
     setTranscript([]);
     setElapsed(0);
     setAnalyser(null);
+    setMicBlocked(false);
     startedAtRef.current = Date.now();
 
     const bridge = createWebAudioBridge((a) => setAnalyser(a));
@@ -67,6 +74,7 @@ export function useGeminiLive(systemInstruction: string): UseGeminiLive {
       callbacks: {
         onStatus: setStatus,
         onTranscript: (turn) => setTranscript((prev) => mergeTurn(prev, turn)),
+        onMicError: () => setMicBlocked(true),
       },
     });
     orchRef.current = orch;
@@ -80,5 +88,9 @@ export function useGeminiLive(systemInstruction: string): UseGeminiLive {
     setAnalyser(null);
   }, []);
 
-  return { status, transcript, elapsed, analyser, start, stop };
+  const sendText = useCallback((text: string) => {
+    orchRef.current?.sendText(text);
+  }, []);
+
+  return { status, transcript, elapsed, analyser, micBlocked, start, stop, sendText };
 }
