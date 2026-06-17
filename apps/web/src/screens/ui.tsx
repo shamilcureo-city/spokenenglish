@@ -18,9 +18,11 @@ export function Logo({ small = false }: { small?: boolean }) {
   );
 }
 
-/** A page container with consistent padding + max width. */
-export function Page({ children }: { children: ReactNode }) {
-  return <div className="mx-auto min-h-screen w-full max-w-xl px-5 py-7">{children}</div>;
+/** A page container with consistent padding + max width. `bottomPad` clears the tab bar. */
+export function Page({ children, bottomPad = false }: { children: ReactNode; bottomPad?: boolean }) {
+  return (
+    <div className={`mx-auto w-full max-w-xl px-5 py-7 ${bottomPad ? 'pb-28' : ''}`}>{children}</div>
+  );
 }
 
 /** Weekly-goal ring (days practised this week / goal). */

@@ -13,7 +13,7 @@ export function CourseScreen({
   onBack,
   onOpenLesson,
 }: {
-  onBack: () => void;
+  onBack?: () => void;
   onOpenLesson: (lesson: Lesson) => void;
 }) {
   const { completedLessonIds, placement } = useStore();
@@ -21,12 +21,16 @@ export function CourseScreen({
   const startUnit = placement?.unitId;
 
   return (
-    <Page>
+    <Page bottomPad>
       <header className="mb-5 flex items-center justify-between">
-        <button onClick={onBack} className="text-sm text-white/50 hover:text-white/85">
-          ← Back
-        </button>
-        <div className="text-sm font-semibold">The course</div>
+        {onBack ? (
+          <button onClick={onBack} className="text-sm text-white/50 hover:text-white/85">
+            ← Back
+          </button>
+        ) : (
+          <div className="w-12" />
+        )}
+        <div className="text-sm font-semibold">Your path</div>
         <div className="w-12" />
       </header>
 

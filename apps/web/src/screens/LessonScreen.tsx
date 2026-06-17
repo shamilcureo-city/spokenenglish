@@ -51,7 +51,7 @@ export function LessonScreen({
     <Page>
       <header className="mb-5 flex items-center justify-between">
         <button onClick={onExit} className="text-sm text-white/50 hover:text-white/85">
-          ← Course
+          ← Back
         </button>
         <div className="text-sm font-semibold">{lesson.title}</div>
         <div className="w-12" />
