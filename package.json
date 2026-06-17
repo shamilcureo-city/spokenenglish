@@ -18,6 +18,7 @@
     "setup": "npm install && npm run build -w packages/core",
     "dev": "npm run dev -w apps/web",
     "dev:api": "node server/index.mjs",
+    "dev:all": "node scripts/dev-all.mjs",
     "build:core": "npm run build -w packages/core",
     "build:core:watch": "npm run build -w packages/core -- --watch",
     "build:web": "npm run build -w apps/web",
