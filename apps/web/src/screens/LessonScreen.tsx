@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Lesson, Turn } from '@fluentmap/core/conversation';
 import { ConversationScreen } from './ConversationScreen';
 import { RecapScreen } from './RecapScreen';
+import { SayItDrill } from './SayItDrill';
 import { Page } from './ui';
 
 /** A single lesson: Learn → Speak (live) → Feedback → complete. */
@@ -14,9 +15,13 @@ export function LessonScreen({
   onExit: () => void;
   onNext: () => void;
 }) {
-  const [phase, setPhase] = useState<'learn' | 'speak' | 'feedback'>('learn');
+  const [phase, setPhase] = useState<'learn' | 'drill' | 'speak' | 'feedback'>('learn');
   const [transcript, setTranscript] = useState<Turn[]>([]);
   const [recording, setRecording] = useState<Blob | undefined>();
+
+  if (phase === 'drill') {
+    return <SayItDrill phrases={lesson.phrases} onDone={() => setPhase('speak')} />;
+  }
 
   if (phase === 'speak') {
     return (
@@ -80,13 +85,19 @@ export function LessonScreen({
       </div>
 
       <p className="mt-5 text-center text-sm text-white/55">
-        Now use these in a real conversation — I'll guide you.
+        First, say them out loud — I'll check each word. Then we'll have a real chat.
       </p>
       <button
-        onClick={() => setPhase('speak')}
+        onClick={() => setPhase('drill')}
         className="mt-3 w-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-300 py-3.5 text-sm font-bold text-black hover:opacity-90"
       >
-        Start speaking →
+        🎤 Practise saying these →
+      </button>
+      <button
+        onClick={() => setPhase('speak')}
+        className="mt-2 w-full py-2 text-center text-xs text-white/40 hover:text-white/70"
+      >
+        Skip to the conversation
       </button>
     </Page>
   );
