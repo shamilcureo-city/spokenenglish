@@ -16,6 +16,7 @@ export function LessonScreen({
 }) {
   const [phase, setPhase] = useState<'learn' | 'speak' | 'feedback'>('learn');
   const [transcript, setTranscript] = useState<Turn[]>([]);
+  const [recording, setRecording] = useState<Blob | undefined>();
 
   if (phase === 'speak') {
     return (
@@ -23,8 +24,9 @@ export function LessonScreen({
         mode="lesson"
         lesson={lesson}
         onBack={() => setPhase('learn')}
-        onEnd={(t) => {
+        onEnd={(t, rec) => {
           setTranscript(t);
+          setRecording(rec);
           setPhase('feedback');
         }}
       />
@@ -37,6 +39,7 @@ export function LessonScreen({
         transcript={transcript}
         mode="lesson"
         lesson={lesson}
+        recording={recording}
         onRedo={() => setPhase('learn')}
         onDone={onNext}
       />

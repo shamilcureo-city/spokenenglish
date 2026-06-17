@@ -53,13 +53,15 @@ export function buildRecapPrompt(input: RecapInput): string {
     '- Focus on being clearly understood: clarity, natural phrasing, the right moves, and confidence. Only flag grammar when it genuinely blocks understanding.',
     '- Quote what they actually said. Keep it tight: at most 2 wins and at most 2 fixes (the highest-leverage ones).',
     `- For a fix that is a language/phrasing point, also write "explanationInL1" in ${supportLanguage} using its native script, so it clicks. If a fix is not language-related, omit explanationInL1.`,
+    '- For "delivery": one short, encouraging tip about how it SOUNDED — pace, clarity, a swallowed word, or a single high-yield sound worth polishing. Frame it as being clearly understood, never as an accent to fix or as shaming. If nothing stands out, use "".',
     '',
     'Return ONLY a JSON object with exactly these fields:',
     '{',
     '  "summary": "1–2 warm sentences",',
     '  "wins": ["1–2 specific things they did well"],',
     '  "fixes": [{"said": "roughly what they said", "better": "a stronger, natural way to say it", "why": "short reason in English", "explanationInL1": "same tip in the mother tongue, or omit"}],',
-    '  "dimensions": {"clarity": 0-100, "concision": 0-100, "confidence": 0-100, "structure": 0-100, "filler": 0-100}',
+    '  "dimensions": {"clarity": 0-100, "concision": 0-100, "confidence": 0-100, "structure": 0-100, "filler": 0-100},',
+    '  "delivery": "one gentle clarity/pronunciation tip, or \\"\\""',
     '}',
     'In "dimensions", higher is always better (filler = 100 means almost no filler words).',
     '',
@@ -139,5 +141,6 @@ export function parseRecap(raw: unknown): Recap {
     fixes: parseFixes(o.fixes),
     strongerAnswers: parseStrongerAnswers(o.strongerAnswers),
     dimensions: parseDimensions(o.dimensions),
+    delivery: typeof o.delivery === 'string' && o.delivery.trim() ? o.delivery.trim() : undefined,
   };
 }

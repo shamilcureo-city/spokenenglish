@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { GeminiLiveOrchestrator, type LiveStatus } from '@fluentmap/core/voice';
 import type { Turn } from '@fluentmap/core/conversation';
-import { createWebAudioBridge } from './audioBridge';
+import { createWebAudioBridge, type WebAudioBridge } from './audioBridge';
 import { createWebSocketAdapter } from './socket';
 import { resolveWsUrl } from '../lib/api';
 
@@ -31,6 +31,8 @@ export interface UseGeminiLive {
   start: () => Promise<void>;
   stop: () => void;
   sendText: (text: string) => void;
+  /** The learner's side of the just-finished session as a WAV blob, or null. */
+  getRecording: () => Blob | null;
 }
 
 export function useGeminiLive(systemInstruction: string): UseGeminiLive {
@@ -41,6 +43,7 @@ export function useGeminiLive(systemInstruction: string): UseGeminiLive {
   const [micBlocked, setMicBlocked] = useState(false);
 
   const orchRef = useRef<GeminiLiveOrchestrator | null>(null);
+  const bridgeRef = useRef<WebAudioBridge | null>(null);
   const startedAtRef = useRef<number | null>(null);
 
   // Session timer.
@@ -66,6 +69,7 @@ export function useGeminiLive(systemInstruction: string): UseGeminiLive {
     startedAtRef.current = Date.now();
 
     const bridge = createWebAudioBridge((a) => setAnalyser(a));
+    bridgeRef.current = bridge;
     const orch = new GeminiLiveOrchestrator({
       resolveWsUrl,
       createSocket: createWebSocketAdapter,
@@ -92,5 +96,9 @@ export function useGeminiLive(systemInstruction: string): UseGeminiLive {
     orchRef.current?.sendText(text);
   }, []);
 
-  return { status, transcript, elapsed, analyser, micBlocked, start, stop, sendText };
+  // Read the bridge's recording directly (not stored in state) so callers can grab
+  // it at session end without an extra render. Survives stop() (chunks aren't cleared).
+  const getRecording = useCallback(() => bridgeRef.current?.getRecording() ?? null, []);
+
+  return { status, transcript, elapsed, analyser, micBlocked, start, stop, sendText, getRecording };
 }

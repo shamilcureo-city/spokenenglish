@@ -23,12 +23,14 @@ export function RecapScreen({
   transcript,
   mode,
   lesson,
+  recording,
   onDone,
   onRedo,
 }: {
   transcript: Turn[];
   mode: ConversationMode;
   lesson?: Lesson;
+  recording?: Blob;
   onDone: () => void;
   onRedo?: () => void;
 }) {
@@ -43,7 +45,36 @@ export function RecapScreen({
   const [win, setWin] = useState<Win | null>(null);
   const [cardFile, setCardFile] = useState<File | null>(null);
   const [shareMsg, setShareMsg] = useState<string | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const ran = useRef(false);
+
+  // "Hear yourself" — own the recording's object URL and revoke it on unmount.
+  useEffect(() => {
+    if (!recording) return;
+    const url = URL.createObjectURL(recording);
+    setAudioUrl(url);
+    return () => {
+      URL.revokeObjectURL(url);
+      setAudioUrl(null);
+    };
+  }, [recording]);
+
+  // Learner turns that used a target phrase (loose match on the first words).
+  const usedSet = new Set((score?.usedMoves ?? []).map((m) => m.toLowerCase()));
+  function turnUsedAMove(text: string): boolean {
+    if (!lesson || usedSet.size === 0) return false;
+    const t = text.toLowerCase();
+    return (lesson.phrases ?? []).some((p) => {
+      if (!usedSet.has(p.toLowerCase())) return false;
+      const key = p
+        .toLowerCase()
+        .replace(/[^a-z0-9'\s]/g, '')
+        .split(/\s+/)
+        .slice(0, 3)
+        .join(' ');
+      return key.length > 2 && t.includes(key);
+    });
+  }
 
   const spoke = transcript.some((t) => t.speaker === 'learner' && t.text.trim().length > 0);
   const title = lesson?.title ?? 'Daily free-talk';
@@ -285,6 +316,52 @@ export function RecapScreen({
         <DimensionBar label="Structure" value={recap.dimensions.structure} />
         <DimensionBar label="Few fillers" value={recap.dimensions.filler} />
       </section>
+
+      {/* Delivery / pronunciation tip — framed as clarity */}
+      {recap.delivery && (
+        <section className="mb-4 rounded-2xl border border-sky-300/15 bg-sky-300/[0.05] p-4">
+          <h2 className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-sky-200/80">How it sounded</h2>
+          <p className="text-sm leading-relaxed text-white/80">{recap.delivery}</p>
+        </section>
+      )}
+
+      {/* Hear yourself — replay the learner's side */}
+      {audioUrl && (
+        <section className="mb-4 rounded-2xl border border-white/5 bg-white/[0.02] p-4">
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-white/40">🎧 Hear yourself</h2>
+          <audio controls src={audioUrl} className="w-full" />
+          <p className="mt-2 text-[11px] text-white/35">
+            Your side of the chat — listening back is one of the fastest ways to improve.
+          </p>
+        </section>
+      )}
+
+      {/* What you said — your turns, with the target moves you used flagged */}
+      {transcript.some((t) => t.speaker === 'learner' && t.text.trim()) && (
+        <section className="mb-5">
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-white/40">What you said</h2>
+          <ul className="space-y-2">
+            {transcript
+              .filter((t) => t.speaker === 'learner' && t.text.trim().length > 0)
+              .map((t, i) => {
+                const used = turnUsedAMove(t.text);
+                return (
+                  <li
+                    key={i}
+                    className={`rounded-xl px-3.5 py-2 text-sm ${
+                      used
+                        ? 'border-l-2 border-emerald-400 bg-emerald-400/[0.06] text-emerald-50'
+                        : 'bg-white/[0.03] text-white/75'
+                    }`}
+                  >
+                    {used && <span className="mr-1 text-emerald-400">✓</span>}
+                    {t.text}
+                  </li>
+                );
+              })}
+          </ul>
+        </section>
+      )}
 
       <div className="flex justify-center gap-3">
         {onRedo && (

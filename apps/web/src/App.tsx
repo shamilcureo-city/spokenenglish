@@ -17,7 +17,7 @@ type Route =
   | { name: 'course' }
   | { name: 'lesson'; lesson: Lesson }
   | { name: 'warmup'; prompt: string }
-  | { name: 'warmupRecap'; transcript: Turn[] }
+  | { name: 'warmupRecap'; transcript: Turn[]; recording?: Blob }
   | { name: 'placement' }
   | { name: 'progress' }
   | { name: 'settings' };
@@ -56,11 +56,19 @@ function Shell() {
           mode="warmup"
           warmupPrompt={route.prompt}
           onBack={home}
-          onEnd={(transcript) => setRoute({ name: 'warmupRecap', transcript })}
+          onEnd={(transcript, recording) => setRoute({ name: 'warmupRecap', transcript, recording })}
         />
       );
     case 'warmupRecap':
-      return <RecapScreen transcript={route.transcript} mode="warmup" onDone={home} onRedo={home} />;
+      return (
+        <RecapScreen
+          transcript={route.transcript}
+          mode="warmup"
+          recording={route.recording}
+          onDone={home}
+          onRedo={home}
+        />
+      );
     case 'progress':
       return <ProgressScreen onBack={home} />;
     case 'settings':

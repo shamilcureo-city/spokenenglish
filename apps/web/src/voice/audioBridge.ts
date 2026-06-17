@@ -33,9 +33,63 @@ function float32ToBase64(f32: Float32Array): string {
   return window.btoa(binary);
 }
 
+/**
+ * Linear-resample a frame from `fromRate` to `toRate`. The capture AudioContext
+ * runs at 24 kHz (to match playback), but Gemini Live expects 16 kHz mic audio —
+ * so we down-sample here rather than sending 24 kHz samples mislabelled as 16 kHz
+ * (which makes the learner's speech sound slowed-down to the model).
+ */
+function resample(frame: Float32Array, fromRate: number, toRate: number): Float32Array {
+  if (fromRate === toRate || frame.length === 0) return frame;
+  const ratio = fromRate / toRate;
+  const outLen = Math.floor(frame.length / ratio);
+  const out = new Float32Array(outLen);
+  for (let i = 0; i < outLen; i++) {
+    const src = i * ratio;
+    const i0 = Math.floor(src);
+    const i1 = Math.min(i0 + 1, frame.length - 1);
+    const t = src - i0;
+    out[i] = frame[i0]! * (1 - t) + frame[i1]! * t;
+  }
+  return out;
+}
+
+/** Encode mono Float32 PCM into a 16-bit WAV Blob (for "hear yourself" replay). */
+function encodeWav(samples: Float32Array, sampleRate: number): Blob {
+  const buf = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buf);
+  const writeStr = (off: number, s: string) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i));
+  };
+  writeStr(0, 'RIFF');
+  view.setUint32(4, 36 + samples.length * 2, true);
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true); // PCM chunk size
+  view.setUint16(20, 1, true); // PCM format
+  view.setUint16(22, 1, true); // mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true); // byte rate
+  view.setUint16(32, 2, true); // block align
+  view.setUint16(34, 16, true); // bits per sample
+  writeStr(36, 'data');
+  view.setUint32(40, samples.length * 2, true);
+  let off = 44;
+  for (let i = 0; i < samples.length; i++, off += 2) {
+    const s = Math.max(-1, Math.min(1, samples[i]!));
+    view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+  return new Blob([buf], { type: 'audio/wav' });
+}
+
 export interface WebAudioBridge extends AudioBridge {
   analyser: AnalyserNode | null;
+  /** The learner's side of the session as a WAV blob (for "hear yourself"), or null. */
+  getRecording(): Blob | null;
 }
+
+/** ~10 min cap on the in-memory recording, as a safety bound. */
+const MAX_REC_SECONDS = 600;
 
 export function createWebAudioBridge(onReady?: (analyser: AnalyserNode) => void): WebAudioBridge {
   let ctx: AudioContext | null = null;
@@ -48,6 +102,12 @@ export function createWebAudioBridge(onReady?: (analyser: AnalyserNode) => void)
   let aiSpeaking = false;
   let gateTimer: ReturnType<typeof setTimeout> | undefined;
 
+  // "Hear yourself" recording: the learner's mic frames (only while the gate is
+  // open, so the AI's voice is never captured), kept at the real capture rate.
+  let recChunks: Float32Array[] = [];
+  let recLen = 0;
+  let recRate: number = AUDIO.inputSampleRate;
+
   const bridge: WebAudioBridge = {
     analyser: null,
 
@@ -55,6 +115,9 @@ export function createWebAudioBridge(onReady?: (analyser: AnalyserNode) => void)
       const audioCtx = new AudioContext({ sampleRate: AUDIO.audioContextSampleRate });
       ctx = audioCtx;
       playbackTime = audioCtx.currentTime;
+      recChunks = [];
+      recLen = 0;
+      recRate = audioCtx.sampleRate; // the ACTUAL context rate (browser may not honour the request)
 
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 256;
@@ -79,7 +142,14 @@ export function createWebAudioBridge(onReady?: (analyser: AnalyserNode) => void)
       worklet = node;
       node.port.onmessage = (event: MessageEvent<Float32Array>) => {
         if (aiSpeaking) return; // echo gate: don't stream the mic while the AI speaks
-        onChunk(float32ToBase64(event.data));
+        const frame = event.data;
+        // Record the learner's side at the real rate (for replay).
+        if (recLen < recRate * MAX_REC_SECONDS) {
+          recChunks.push(frame.slice());
+          recLen += frame.length;
+        }
+        // Send true 16 kHz to Gemini (down-sampled from the 24 kHz capture context).
+        onChunk(float32ToBase64(resample(frame, audioCtx.sampleRate, AUDIO.inputSampleRate)));
       };
       micSource.connect(node);
     },
@@ -145,6 +215,17 @@ export function createWebAudioBridge(onReady?: (analyser: AnalyserNode) => void)
         clearTimeout(gateTimer);
         gateTimer = undefined;
       }
+    },
+
+    getRecording(): Blob | null {
+      if (recLen === 0) return null;
+      const merged = new Float32Array(recLen);
+      let off = 0;
+      for (const c of recChunks) {
+        merged.set(c, off);
+        off += c.length;
+      }
+      return encodeWav(merged, recRate);
     },
 
     stop(): void {

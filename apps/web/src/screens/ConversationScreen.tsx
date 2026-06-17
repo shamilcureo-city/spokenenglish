@@ -21,7 +21,7 @@ export function ConversationScreen({
   mode: ConversationMode;
   lesson?: Lesson;
   warmupPrompt?: string;
-  onEnd: (transcript: Turn[]) => void;
+  onEnd: (transcript: Turn[], recording?: Blob) => void;
   onBack: () => void;
 }) {
   const { profile, lessonAttempts, liveSecondsUsedToday, recordLiveSeconds } = useStore();
@@ -44,7 +44,7 @@ export function ConversationScreen({
     [mode, profile.l1, profile.name, warmupPrompt, lesson, attempt, profile.goal, profile.interests],
   );
 
-  const { status, transcript, elapsed, analyser, micBlocked, start, stop, sendText } =
+  const { status, transcript, elapsed, analyser, micBlocked, start, stop, sendText, getRecording } =
     useGeminiLive(systemInstruction);
   const [draft, setDraft] = useState('');
 
@@ -86,9 +86,10 @@ export function ConversationScreen({
             : `${COACH_NAME} is ready when you are`;
 
   function end() {
+    const recording = getRecording() ?? undefined; // grab before teardown
     stop();
     if (elapsed > 0) recordLiveSeconds(elapsed); // COGS metering
-    onEnd(transcript);
+    onEnd(transcript, recording);
   }
 
   // COGS guardrails: auto-end on prolonged silence or at the hard session cap.
@@ -259,7 +260,7 @@ export function ConversationScreen({
       {!isActive && transcript.length > 0 && (
         <div className="flex justify-center">
           <button
-            onClick={() => onEnd(transcript)}
+            onClick={end}
             className="rounded-full border border-white/15 bg-white/[0.04] px-6 py-2.5 text-sm font-semibold hover:bg-white/[0.08]"
           >
             See my feedback →

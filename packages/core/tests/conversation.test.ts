@@ -44,6 +44,13 @@ test('parseRecap returns a usable default for empty input', () => {
   assert.ok(r.summary.length > 0);
   assert.deepEqual(r.fixes, []);
   assert.deepEqual(r.strongerAnswers, []);
+  assert.equal(r.delivery, undefined);
+});
+
+test('parseRecap keeps a delivery tip when present and drops an empty one', () => {
+  assert.equal(parseRecap({ delivery: '  Slow down a touch on long sentences.  ' }).delivery, 'Slow down a touch on long sentences.');
+  assert.equal(parseRecap({ delivery: '' }).delivery, undefined);
+  assert.equal(parseRecap({ delivery: 123 }).delivery, undefined);
 });
 
 test('warm-up persona includes the topic and forbids mid-conversation correction', () => {

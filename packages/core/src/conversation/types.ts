@@ -57,4 +57,6 @@ export interface Recap {
   /** Rehearsal only: stronger answers to the counterpart's hard questions. */
   strongerAnswers: StrongerAnswer[];
   dimensions: RecapDimensions;
+  /** One gentle delivery/pronunciation tip — how it SOUNDED (pace, clarity, a sound to polish). Framed as clarity, never shaming. */
+  delivery?: string;
 }
