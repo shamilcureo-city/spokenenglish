@@ -45,6 +45,18 @@ export function tokenize(s: string): string[] {
     .filter((w) => w.length > 0);
 }
 
+/**
+ * Did the recognizer catch enough of the target to trust this as a real attempt?
+ * A garbled / clipped / mostly-silent capture yields a transcript with far fewer
+ * tokens than the target — scoring that would record false "weakness", so we skip
+ * it. (~40% of the target's words must have been heard.)
+ */
+export function attemptReliable(target: string, heard: string): boolean {
+  const t = tokenize(target).length;
+  if (t === 0) return false;
+  return tokenize(heard).length >= Math.max(1, Math.ceil(t * 0.4));
+}
+
 /** Classic Levenshtein edit distance (small strings). */
 export function levenshtein(a: string, b: string): number {
   if (a === b) return 0;

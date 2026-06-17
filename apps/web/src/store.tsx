@@ -7,10 +7,13 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   humaneStreak,
+  recordEvidence,
   WARMUP_XP,
   type ConversationMode,
+  type Evidence,
   type GoalId,
   type LessonScore,
+  type MasteryState,
   type Placement,
   type Recap,
 } from '@fluentmap/core/conversation';
@@ -52,6 +55,8 @@ interface Persisted {
   /** COGS metering: live realtime voice seconds used today (reset daily). */
   liveSecondsToday: number;
   liveDate: string;
+  /** Concept-mastery memory (Phase 2): recurring words/phrases scored from spoken usage. */
+  mastery: MasteryState;
 }
 
 const DEFAULT: Persisted = {
@@ -68,6 +73,7 @@ const DEFAULT: Persisted = {
   reminderTime: null,
   liveSecondsToday: 0,
   liveDate: '1970-01-01',
+  mastery: {},
 };
 
 const KEY = 'speakwell-state-v1';
@@ -124,6 +130,8 @@ interface Store extends Persisted {
   /** Live voice seconds used today (reset-aware). */
   liveSecondsUsedToday: number;
   recordLiveSeconds(seconds: number): void;
+  /** Fold spoken-attempt evidence into concept-mastery memory (Phase 2). */
+  recordMastery(evidence: Evidence[]): void;
   reset(): void;
 }
 
@@ -185,6 +193,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const base = s.liveDate === today ? s.liveSecondsToday : 0;
         return { ...s, liveDate: today, liveSecondsToday: base + Math.max(0, Math.round(seconds)) };
       }),
+    recordMastery: (evidence) => setState((s) => ({ ...s, mastery: recordEvidence(s.mastery, evidence) })),
     reset: () => {
       setState(DEFAULT);
       try {

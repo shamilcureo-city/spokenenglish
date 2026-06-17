@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { scoreUtterance, normalizeWord, tokenize, levenshtein } from '../src/conversation/index.js';
+import { scoreUtterance, normalizeWord, tokenize, levenshtein, attemptReliable } from '../src/conversation/index.js';
 
 test('normalizeWord strips punctuation and case, keeps inner apostrophes', () => {
   assert.equal(normalizeWord('Hello,'), 'hello');
@@ -51,4 +51,11 @@ test('word order slips still credit the word', () => {
 test('thresholds: ~half caught lands at 1–2 stars, not 3', () => {
   const r = scoreUtterance('one two three four', 'one two');
   assert.ok(r.stars < 3);
+});
+
+test('attemptReliable rejects garbled/clipped captures, accepts real attempts', () => {
+  assert.equal(attemptReliable('Could I get a coffee please', 'could i get a coffee please'), true);
+  assert.equal(attemptReliable('Could I get a coffee please', 'coffee'), false); // only 1 of 6 heard
+  assert.equal(attemptReliable('Could I get a coffee please', ''), false);
+  assert.equal(attemptReliable('Nice to meet you', 'nice to meet'), true); // 3 of 4 — enough
 });

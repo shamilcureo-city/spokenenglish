@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { buildPartnerPrompt, COACH_NAME, type ConversationMode, type Lesson, type Turn } from '@fluentmap/core/conversation';
+import {
+  buildPartnerPrompt,
+  weakestConcepts,
+  COACH_NAME,
+  type ConversationMode,
+  type Lesson,
+  type Turn,
+} from '@fluentmap/core/conversation';
 import { useGeminiLive } from '../voice/useGeminiLive';
 import { AudioVisualizer } from '../session/AudioVisualizer';
 import { useStore } from '../store';
@@ -24,7 +31,7 @@ export function ConversationScreen({
   onEnd: (transcript: Turn[], recording?: Blob) => void;
   onBack: () => void;
 }) {
-  const { profile, lessonAttempts, liveSecondsUsedToday, recordLiveSeconds } = useStore();
+  const { profile, lessonAttempts, mastery, liveSecondsUsedToday, recordLiveSeconds } = useStore();
   const secondsLeft = Math.max(0, DAILY_FREE_LIVE_SECONDS - liveSecondsUsedToday);
   const outOfMinutes = secondsLeft <= 0;
   const attempt = lesson ? lessonAttempts[lesson.id] ?? 0 : 0;
@@ -40,8 +47,9 @@ export function ConversationScreen({
         attempt,
         goal: profile.goal,
         interests: profile.interests,
+        focus: weakestConcepts(mastery, 4).map((m) => m.label),
       }),
-    [mode, profile.l1, profile.name, warmupPrompt, lesson, attempt, profile.goal, profile.interests],
+    [mode, profile.l1, profile.name, warmupPrompt, lesson, attempt, profile.goal, profile.interests, mastery],
   );
 
   const { status, transcript, elapsed, analyser, micBlocked, start, stop, sendText, getRecording } =

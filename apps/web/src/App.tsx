@@ -9,6 +9,7 @@ import { CourseScreen } from './screens/CourseScreen';
 import { Review } from './screens/Review';
 import { You } from './screens/You';
 import { LessonScreen } from './screens/LessonScreen';
+import { SayItDrill } from './screens/SayItDrill';
 import { ConversationScreen } from './screens/ConversationScreen';
 import { RecapScreen } from './screens/RecapScreen';
 import { ProgressScreen } from './screens/ProgressScreen';
@@ -18,6 +19,7 @@ import { StateStrip, TabBar, type Tab } from './screens/shell';
 /** Full-screen flows that take over from the tabs (immersive — no nav chrome). */
 type Modal =
   | { name: 'lesson'; lesson: Lesson }
+  | { name: 'drill'; phrases: string[] }
   | { name: 'warmup'; prompt: string }
   | { name: 'warmupRecap'; transcript: Turn[]; recording?: Blob; prompt: string }
   | { name: 'placement' }
@@ -47,6 +49,8 @@ function Shell() {
         return <PlacementScreen onDone={close} />;
       case 'lesson':
         return <LessonScreen lesson={modal.lesson} onExit={close} onNext={close} />;
+      case 'drill':
+        return <SayItDrill phrases={modal.phrases} onDone={close} />;
       case 'warmup':
         return (
           <ConversationScreen
@@ -82,7 +86,13 @@ function Shell() {
       content = <CourseScreen onOpenLesson={openLesson} />;
       break;
     case 'review':
-      content = <Review onOpenLesson={openLesson} onFreeChat={openWarmup} />;
+      content = (
+        <Review
+          onOpenLesson={openLesson}
+          onFreeChat={openWarmup}
+          onPractise={(phrases) => setModal({ name: 'drill', phrases })}
+        />
+      );
       break;
     case 'you':
       content = <You onProgress={() => setModal({ name: 'progress' })} onSettings={() => setModal({ name: 'settings' })} />;

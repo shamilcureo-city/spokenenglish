@@ -5,8 +5,15 @@
  * tap-to-fix (hear it + slow replay). Sits between Learn and Speak in a lesson.
  */
 import { useEffect, useRef, useState } from 'react';
-import { scoreUtterance, type UtteranceScore, type WordScore } from '@fluentmap/core/conversation';
+import {
+  scoreUtterance,
+  evidenceFromUtterance,
+  attemptReliable,
+  type UtteranceScore,
+  type WordScore,
+} from '@fluentmap/core/conversation';
 import { useSpeechRecognition } from '../voice/useSpeechRecognition';
+import { useStore } from '../store';
 import { speak, ttsSupported } from '../lib/tts';
 import { Page } from './ui';
 
@@ -25,11 +32,13 @@ export function SayItDrill({
   onDone: () => void;
   coachName?: string;
 }) {
+  const { recordMastery } = useStore();
   const { supported, listening, transcript, interim, error, start, abort, reset } =
     useSpeechRecognition('en-IN');
   const [i, setI] = useState(0);
   const [results, setResults] = useState<Record<number, UtteranceScore>>({});
   const [fix, setFix] = useState<WordScore | null>(null);
+  const [lowSignal, setLowSignal] = useState(false); // recogniser caught too little to trust
   // The phrase index the current recognition belongs to, so a late result is always
   // attributed to the phrase it was recorded for (never the phrase we've moved on to).
   const recordingIndexRef = useRef<number | null>(null);
@@ -42,13 +51,23 @@ export function SayItDrill({
   useEffect(() => {
     const ri = recordingIndexRef.current;
     if (!listening && transcript && ri !== null && results[ri] === undefined) {
-      setResults((r) => ({ ...r, [ri]: scoreUtterance(phrases[ri] ?? '', transcript) }));
+      const target = phrases[ri] ?? '';
+      // Don't score / record a garbled or clipped capture as "weakness" — ask for a retry.
+      if (!attemptReliable(target, transcript)) {
+        setLowSignal(true);
+        return;
+      }
+      setLowSignal(false);
+      const score = scoreUtterance(target, transcript);
+      setResults((r) => ({ ...r, [ri]: score }));
+      recordMastery(evidenceFromUtterance(target, score)); // feed the mastery memory
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listening, transcript]);
 
   function record() {
     setFix(null);
+    setLowSignal(false);
     abort(); // discard any in-flight session before starting a fresh one
     recordingIndexRef.current = i;
     reset();
@@ -101,16 +120,28 @@ export function SayItDrill({
       <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5">
         <div className="text-2xl font-semibold leading-snug">
           {result ? (
-            result.words.map((w, idx) => (
-              <button
-                key={idx}
-                onClick={() => w.status !== 'good' && setFix(w)}
-                className={`${COLOR[w.status]} ${w.status !== 'good' ? 'cursor-pointer' : 'cursor-default'}`}
-              >
-                {w.word}
-                {idx < result.words.length - 1 ? ' ' : ''}
-              </button>
-            ))
+            result.words.map((w, idx) => {
+              const space = idx < result.words.length - 1 ? ' ' : '';
+              if (w.status === 'good') {
+                return (
+                  <span key={idx} className={COLOR.good}>
+                    {w.word}
+                    {space}
+                  </span>
+                );
+              }
+              return (
+                <button
+                  key={idx}
+                  onClick={() => setFix(w)}
+                  aria-label={`Fix "${w.word}" — ${w.status === 'missing' ? 'not caught' : 'almost there'}`}
+                  className={`${COLOR[w.status]} cursor-pointer`}
+                >
+                  {w.word}
+                  {space}
+                </button>
+              );
+            })
           ) : (
             <span className="text-white/90">{phrase}</span>
           )}
@@ -192,6 +223,9 @@ export function SayItDrill({
                 ? 'No microphone found — plug one in, or tap Skip to talk live.'
                 : "Couldn't hear that — tap and try again."}
           </p>
+        )}
+        {lowSignal && !error && (
+          <p className="text-center text-xs text-amber-200/80">Couldn't quite catch that — say it once more.</p>
         )}
       </div>
 

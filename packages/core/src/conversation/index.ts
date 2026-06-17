@@ -13,3 +13,4 @@ export * from './placement.js';
 export * from './gamification.js';
 export * from './personalization.js';
 export * from './pronunciation.js';
+export * from './mastery.js';

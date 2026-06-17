@@ -31,6 +31,8 @@ export interface PartnerPromptInput {
   goal?: GoalId;
   /** Personalization — a few interests the partner can naturally bring up. */
   interests?: string[];
+  /** Mastery memory — words/phrases the learner has recently struggled with. */
+  focus?: string[];
 }
 
 /** Shared "talk like a real human on a voice call" rules. */
@@ -50,10 +52,14 @@ function baseVoice(supportLanguage: string): string {
 }
 
 export function buildPartnerPrompt(input: PartnerPromptInput): string {
-  const { mode, supportLanguage, userName, warmupPrompt, lesson, attempt, goal, interests } = input;
+  const { mode, supportLanguage, userName, warmupPrompt, lesson, attempt, goal, interests, focus } = input;
   const name = userName?.trim() ? userName.trim() : 'there';
-  // Voice rules + (optional) personalization flavour, as the shared intro for both modes.
-  const base = [baseVoice(supportLanguage), personaFlavor(goal, interests)].filter(Boolean).join('\n');
+  const focusLine =
+    focus && focus.length
+      ? `The learner has recently struggled with: ${focus.join(', ')}. If these come up naturally, give them a warm chance to use them well — but do NOT drill or correct mid-chat.`
+      : '';
+  // Voice rules + (optional) personalization flavour + weak-spot focus — the shared intro.
+  const base = [baseVoice(supportLanguage), personaFlavor(goal, interests), focusLine].filter(Boolean).join('\n');
 
   if (mode === 'lesson' && lesson) {
     const phraseList = lesson.phrases.map((p) => `  - ${p}`).join('\n');
