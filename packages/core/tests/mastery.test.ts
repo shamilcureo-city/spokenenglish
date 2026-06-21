@@ -5,6 +5,7 @@ import {
   evidenceFromUtterance,
   weakestConcepts,
   masteryStats,
+  pruneMastery,
   scoreUtterance,
   slugify,
   type MasteryState,
@@ -65,6 +66,20 @@ test('weakestConcepts returns lowest mastery first, excludes mastered, respects 
   assert.deepEqual(weakWords.map((m) => m.label), ['village', 'restaurant']); // hello excluded, asc
   const weakPhrases = weakestConcepts(s, 5, { kind: 'phrase' });
   assert.deepEqual(weakPhrases.map((m) => m.label), ['a phrase']);
+});
+
+test('pruneMastery bounds the store, keeping the weakest (evicting mastered first)', () => {
+  let s: MasteryState = {};
+  for (let i = 0; i < 10; i++) {
+    s = recordEvidence(s, [{ id: `w${i}`, label: `w${i}`, kind: 'word', outcome: i / 10 }]);
+  }
+  const pruned = pruneMastery(s, 4);
+  assert.equal(Object.keys(pruned).length, 4);
+  // the lowest-outcome ids survive; the highest are evicted
+  assert.ok(pruned['w0'] && pruned['w1']);
+  assert.ok(!pruned['w9'] && !pruned['w8']);
+  // under the cap → unchanged reference
+  assert.equal(pruneMastery(s, 100), s);
 });
 
 test('masteryStats counts mastered vs working', () => {

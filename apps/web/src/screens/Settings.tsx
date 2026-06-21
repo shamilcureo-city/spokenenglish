@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { GOALS, INTERESTS } from '@fluentmap/core/conversation';
 import { useStore } from '../store';
 import { LANGUAGES } from '../lib/constants';
@@ -6,7 +7,9 @@ import { Page } from './ui';
 const MAX_INTERESTS = 5;
 
 export function Settings({ onBack }: { onBack: () => void }) {
-  const { profile, setProfile, weeklyGoal, setWeeklyGoal, reset } = useStore();
+  const { profile, setProfile, weeklyGoal, setWeeklyGoal, storageWarning, exportData, importData, reset } =
+    useStore();
+  const fileRef = useRef<HTMLInputElement>(null);
 
   function toggleInterest(tag: string) {
     const cur = profile.interests ?? [];
@@ -16,6 +19,25 @@ export function Settings({ onBack }: { onBack: () => void }) {
         ? cur
         : [...cur, tag];
     setProfile({ interests: next });
+  }
+
+  function doExport() {
+    const blob = new Blob([exportData()], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `speakwell-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    void file.text().then((text) => {
+      if (importData(text)) alert('Backup restored.');
+      else alert("That file didn't look like a Speakwell backup.");
+    });
   }
 
   function doReset() {
@@ -132,13 +154,44 @@ export function Settings({ onBack }: { onBack: () => void }) {
           </div>
         </div>
 
+        {/* Backup — the only safety net before accounts/sync exist */}
+        <div className="border-t border-white/5 pt-5">
+          <span className="mb-2 block text-xs font-semibold uppercase tracking-wider text-white/45">
+            Backup your progress
+          </span>
+          {storageWarning && (
+            <p className="mb-3 rounded-lg border border-amber-300/20 bg-amber-300/[0.06] px-3 py-2 text-xs text-amber-100/90">
+              ⚠️ This browser is low on storage — export a backup so you don't lose your streak.
+            </p>
+          )}
+          <div className="flex gap-2">
+            <button
+              onClick={doExport}
+              className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold hover:bg-white/[0.06]"
+            >
+              ⬇️ Export
+            </button>
+            <button
+              onClick={() => fileRef.current?.click()}
+              className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold hover:bg-white/[0.06]"
+            >
+              ⬆️ Restore
+            </button>
+            <input ref={fileRef} type="file" accept="application/json,.json" onChange={onPickFile} className="hidden" />
+          </div>
+          <p className="mt-2 text-[11px] text-white/35">
+            Your progress lives only in this browser for now — export keeps a copy safe.
+          </p>
+        </div>
+
         <div className="border-t border-white/5 pt-5">
           <button onClick={doReset} className="text-sm text-red-300/80 hover:text-red-300">
             Clear all data
           </button>
           <p className="mt-4 text-[11px] leading-relaxed text-white/30">
-            Speakwell runs on your device. Your profile, progress, and history are stored locally in this
-            browser only.
+            Your profile and progress are stored only in this browser (there's no account yet). During a live
+            conversation, your speech is sent to Google Gemini to power the AI partner and your feedback — it
+            isn't used to train models or shared with anyone else.
           </p>
         </div>
       </div>

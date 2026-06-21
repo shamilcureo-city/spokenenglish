@@ -33,7 +33,14 @@ export function PlacementScreen({ onDone }: { onDone: () => void }) {
 
   if (phase === 'speak') {
     return (
-      <ConversationScreen mode="warmup" warmupPrompt={OPENER} onBack={() => setPhase('intro')} onEnd={assess} />
+      <ConversationScreen
+        mode="warmup"
+        warmupPrompt={OPENER}
+        onBack={() => setPhase('intro')}
+        onEnd={assess}
+        onSkip={onDone}
+        ignoreCap
+      />
     );
   }
 

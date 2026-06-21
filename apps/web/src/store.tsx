@@ -4,10 +4,11 @@
  * streak), and a weekly goal. Persisted to localStorage.
  */
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   humaneStreak,
   recordEvidence,
+  pruneMastery,
   WARMUP_XP,
   type ConversationMode,
   type Evidence,
@@ -57,7 +58,11 @@ interface Persisted {
   liveDate: string;
   /** Concept-mastery memory (Phase 2): recurring words/phrases scored from spoken usage. */
   mastery: MasteryState;
+  /** Schema version, for forward-compatible migrations. */
+  version: number;
 }
+
+const VERSION = 1;
 
 const DEFAULT: Persisted = {
   profile: { name: '', l1: 'Hindi' },
@@ -74,6 +79,7 @@ const DEFAULT: Persisted = {
   liveSecondsToday: 0,
   liveDate: '1970-01-01',
   mastery: {},
+  version: VERSION,
 };
 
 const KEY = 'speakwell-state-v1';
@@ -104,10 +110,23 @@ function uid(): string {
   }
 }
 
+/** Forward-compatible migration: backfill missing keys + defend against corrupt shapes.
+ *  Branch on `raw.version` here when the schema changes in a breaking way. */
+function migrate(raw: Partial<Persisted>): Persisted {
+  const merged: Persisted = { ...DEFAULT, ...raw, version: VERSION };
+  if (typeof merged.mastery !== 'object' || merged.mastery === null) merged.mastery = {};
+  if (!Array.isArray(merged.days)) merged.days = [];
+  if (!Array.isArray(merged.completedLessonIds)) merged.completedLessonIds = [];
+  if (!Array.isArray(merged.recaps)) merged.recaps = [];
+  if (typeof merged.lessonStars !== 'object' || merged.lessonStars === null) merged.lessonStars = {};
+  if (typeof merged.lessonAttempts !== 'object' || merged.lessonAttempts === null) merged.lessonAttempts = {};
+  return merged;
+}
+
 function load(): Persisted {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? { ...DEFAULT, ...(JSON.parse(raw) as Partial<Persisted>) } : DEFAULT;
+    return raw ? migrate(JSON.parse(raw) as Partial<Persisted>) : DEFAULT;
   } catch {
     return DEFAULT;
   }
@@ -132,6 +151,12 @@ interface Store extends Persisted {
   recordLiveSeconds(seconds: number): void;
   /** Fold spoken-attempt evidence into concept-mastery memory (Phase 2). */
   recordMastery(evidence: Evidence[]): void;
+  /** True when the browser refused to persist (quota/private mode) — surfaced in Settings. */
+  storageWarning: boolean;
+  /** Download-able JSON snapshot of all progress (manual backup, pre-accounts). */
+  exportData(): string;
+  /** Restore from an exported snapshot; returns false if the JSON is invalid. */
+  importData(json: string): boolean;
   reset(): void;
 }
 
@@ -139,13 +164,36 @@ const Ctx = createContext<Store | null>(null);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<Persisted>(load);
+  const [storageWarning, setStorageWarning] = useState(false);
+  const trimmedOnce = useRef(false);
 
+  // Ask the browser to keep our storage (so iOS/Safari don't evict the streak).
+  useEffect(() => {
+    void navigator.storage?.persist?.().catch(() => {});
+  }, []);
+
+  // Persist — and survive a full quota: trim once, retry, and surface a warning
+  // instead of silently dropping every future write (XP, streak, lessons…).
   useEffect(() => {
     try {
       localStorage.setItem(KEY, JSON.stringify(state));
+      if (storageWarning) setStorageWarning(false);
+      trimmedOnce.current = false;
     } catch {
-      /* ignore */
+      setStorageWarning(true);
+      const tooBig =
+        Object.keys(state.mastery).length > 150 || state.recaps.length > 20 || state.days.length > 120;
+      if (tooBig && !trimmedOnce.current) {
+        trimmedOnce.current = true;
+        setState((s) => ({
+          ...s,
+          mastery: pruneMastery(s.mastery, 150),
+          recaps: s.recaps.slice(0, 20),
+          days: s.days.slice(-120),
+        }));
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
   const streak = useMemo(() => humaneStreak(state.days, shiftKey), [state.days]);
@@ -153,7 +201,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const withToday = (s: Persisted): string[] => {
     const today = dateKey();
-    return s.days.includes(today) ? s.days : [...s.days, today];
+    return (s.days.includes(today) ? s.days : [...s.days, today]).slice(-180); // ~6 months of history
   };
 
   const liveSecondsUsedToday = state.liveDate === dateKey() ? state.liveSecondsToday : 0;
@@ -193,7 +241,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const base = s.liveDate === today ? s.liveSecondsToday : 0;
         return { ...s, liveDate: today, liveSecondsToday: base + Math.max(0, Math.round(seconds)) };
       }),
-    recordMastery: (evidence) => setState((s) => ({ ...s, mastery: recordEvidence(s.mastery, evidence) })),
+    recordMastery: (evidence) =>
+      setState((s) => ({ ...s, mastery: pruneMastery(recordEvidence(s.mastery, evidence)) })),
+    storageWarning,
+    exportData: () => JSON.stringify(state, null, 2),
+    importData: (json) => {
+      try {
+        const parsed = JSON.parse(json) as Partial<Persisted>;
+        if (!parsed || typeof parsed !== 'object') return false;
+        setState(migrate(parsed));
+        return true;
+      } catch {
+        return false;
+      }
+    },
     reset: () => {
       setState(DEFAULT);
       try {

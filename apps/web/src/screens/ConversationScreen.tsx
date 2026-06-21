@@ -24,16 +24,22 @@ export function ConversationScreen({
   warmupPrompt,
   onEnd,
   onBack,
+  onSkip,
+  ignoreCap = false,
 }: {
   mode: ConversationMode;
   lesson?: Lesson;
   warmupPrompt?: string;
   onEnd: (transcript: Turn[], recording?: Blob) => void;
   onBack: () => void;
+  /** Optional escape hatch (e.g. placement "skip — start at Foundation"). */
+  onSkip?: () => void;
+  /** Exempt from the daily live-voice cap (the one-time placement). */
+  ignoreCap?: boolean;
 }) {
   const { profile, lessonAttempts, mastery, liveSecondsUsedToday, recordLiveSeconds } = useStore();
   const secondsLeft = Math.max(0, DAILY_FREE_LIVE_SECONDS - liveSecondsUsedToday);
-  const outOfMinutes = secondsLeft <= 0;
+  const outOfMinutes = !ignoreCap && secondsLeft <= 0;
   const attempt = lesson ? lessonAttempts[lesson.id] ?? 0 : 0;
 
   const systemInstruction = useMemo(
@@ -96,8 +102,15 @@ export function ConversationScreen({
   function end() {
     const recording = getRecording() ?? undefined; // grab before teardown
     stop();
-    if (elapsed > 0) recordLiveSeconds(elapsed); // COGS metering
+    if (!ignoreCap && elapsed > 0) recordLiveSeconds(elapsed); // COGS metering
     onEnd(transcript, recording);
+  }
+
+  // Leaving mid-session discards the transcript/recording — confirm if they've spoken.
+  function handleBack() {
+    if (isActive && learnerChars > 0 && !window.confirm("Leave now? This session won't be saved.")) return;
+    stop();
+    onBack();
   }
 
   // COGS guardrails: auto-end on prolonged silence or at the hard session cap.
@@ -112,7 +125,7 @@ export function ConversationScreen({
   return (
     <Page>
       <header className="mb-5 flex items-center justify-between">
-        <button onClick={onBack} className="text-sm text-white/50 hover:text-white/85">
+        <button onClick={handleBack} className="text-sm text-white/50 hover:text-white/85">
           ← Back
         </button>
         <div className="text-center">
@@ -121,6 +134,15 @@ export function ConversationScreen({
         </div>
         <div className="w-12 text-right font-mono text-sm tabular-nums text-white/55">{mmss(elapsed)}</div>
       </header>
+
+      {onSkip && (
+        <button
+          onClick={onSkip}
+          className="mb-3 w-full text-center text-xs text-white/40 underline hover:text-white/70"
+        >
+          Skip — start at Foundation
+        </button>
+      )}
 
       {/* Pre-start context */}
       {!isActive && transcript.length === 0 && (

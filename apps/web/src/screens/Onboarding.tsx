@@ -137,7 +137,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
 
         <label className="block">
           <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-white/45">
-            When will you practise? <span className="font-normal lowercase text-white/35">— we'll nudge you (optional)</span>
+            When will you practise? <span className="font-normal lowercase text-white/35">— to build the habit (optional)</span>
           </span>
           <div className="flex flex-wrap gap-2">
             {WHEN.map((w) => (
@@ -163,7 +163,9 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
       >
         Let's go →
       </button>
-      <p className="mt-3 text-center text-[11px] text-white/30">Runs on your device. Nothing is shared.</p>
+      <p className="mt-3 text-center text-[11px] text-white/30">
+        Your progress stays in this browser. Conversations use Google Gemini to power Sunny.
+      </p>
     </Page>
   );
 }

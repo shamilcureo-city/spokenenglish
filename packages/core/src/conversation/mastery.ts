@@ -100,6 +100,20 @@ export function weakestConcepts(
     .slice(0, Math.max(0, n));
 }
 
+/**
+ * Keep the store bounded (localStorage is ~5 MB). When over `max`, drop the
+ * most-mastered concepts first — they're the least useful to resurface, and the
+ * weakest (the moat) are always kept.
+ */
+export function pruneMastery(state: MasteryState, max = 500): MasteryState {
+  const all = Object.values(state);
+  if (all.length <= max) return state;
+  const kept = all.sort((a, b) => a.mastery - b.mastery).slice(0, max);
+  const next: MasteryState = {};
+  for (const m of kept) next[m.id] = m;
+  return next;
+}
+
 export interface MasteryStats {
   tracked: number;
   mastered: number;
