@@ -93,12 +93,19 @@ function corsOrigin(origin, cb) {
 // In-memory per-IP rate limiter (single-process; swap for Redis when you scale).
 function rateLimit({ windowMs, max }) {
   const hits = new Map(); // ip -> number[] (timestamps)
+  // Sweep stale IPs so the Map can't grow without bound (incl. spoofed XFF values).
+  const sweep = setInterval(() => {
+    const now = Date.now();
+    for (const [ip, ts] of hits) if (!ts.some((t) => now - t < windowMs)) hits.delete(ip);
+  }, windowMs);
+  sweep.unref?.();
   return (req, res, next) => {
     const ip = req.ip || req.socket?.remoteAddress || 'unknown';
     const now = Date.now();
     const recent = (hits.get(ip) || []).filter((t) => now - t < windowMs);
     if (recent.length >= max) return res.status(429).json({ error: 'Too many requests — slow down.' });
     recent.push(now);
+    if (hits.size > 50_000) hits.clear(); // hard backstop against a spoofed-IP flood
     hits.set(ip, recent);
     next();
   };
@@ -119,7 +126,8 @@ function validTranscript(t) {
 // Ephemeral Gemini Live tokens (opt-in via GEMINI_EPHEMERAL=true). Keeps the raw key
 // off the client. VERIFY against your live Gemini project before enabling in prod —
 // the API shape can change; this fails CLOSED (never falls back to the raw key).
-const USE_EPHEMERAL = process.env.GEMINI_EPHEMERAL === 'true';
+const USE_EPHEMERAL =
+  process.env.GEMINI_EPHEMERAL === 'true' || process.env.GEMINI_USE_EPHEMERAL_TOKENS === 'true';
 async function mintEphemeralToken() {
   const expire = new Date(Date.now() + 30 * 60 * 1000).toISOString();
   const res = await fetch(
@@ -241,5 +249,11 @@ app.post('/placement', scoreLimiter, async (req, res) => {
 app.listen(PORT, () => {
   console.log(`\n  Greenroom dev API → http://localhost:${PORT}`);
   console.log(`  Gemini key: ${GEMINI_API_KEY ? '✅ loaded' : '❌ MISSING (set GEMINI_API_KEY)'}`);
+  console.log(`  Ephemeral tokens: ${USE_EPHEMERAL ? '✅ on' : 'off (raw key — localhost only)'}`);
+  // Loud fail-safe: a CORS allowlist signals production, where the raw key must NOT ship.
+  if (ALLOWED_ORIGINS.length > 0 && !USE_EPHEMERAL) {
+    console.error('\n  ⚠️  PRODUCTION RISK: ALLOWED_ORIGINS is set but ephemeral tokens are OFF.');
+    console.error('     The raw Gemini key would be sent to browsers. Set GEMINI_EPHEMERAL=true.\n');
+  }
   console.log(`  Point the web app at it: apps/web/.env → VITE_FUNCTIONS_URL=http://localhost:${PORT}\n`);
 });

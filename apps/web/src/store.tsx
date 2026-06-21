@@ -112,14 +112,31 @@ function uid(): string {
 
 /** Forward-compatible migration: backfill missing keys + defend against corrupt shapes.
  *  Branch on `raw.version` here when the schema changes in a breaking way. */
+function isObj(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
 function migrate(raw: Partial<Persisted>): Persisted {
   const merged: Persisted = { ...DEFAULT, ...raw, version: VERSION };
-  if (typeof merged.mastery !== 'object' || merged.mastery === null) merged.mastery = {};
+  // Profile must be an object — a null/string/array would crash every screen.
+  merged.profile = isObj(merged.profile) ? { ...DEFAULT.profile, ...merged.profile } : { ...DEFAULT.profile };
+  // Mastery: drop any non-MasteryItem values (a null entry crashes the readers).
+  const cleanMastery: MasteryState = {};
+  if (isObj(merged.mastery)) {
+    for (const [k, v] of Object.entries(merged.mastery)) {
+      if (isObj(v) && typeof v.mastery === 'number' && typeof v.id === 'string') {
+        cleanMastery[k] = v as unknown as MasteryState[string];
+      }
+    }
+  }
+  merged.mastery = cleanMastery;
   if (!Array.isArray(merged.days)) merged.days = [];
   if (!Array.isArray(merged.completedLessonIds)) merged.completedLessonIds = [];
   if (!Array.isArray(merged.recaps)) merged.recaps = [];
-  if (typeof merged.lessonStars !== 'object' || merged.lessonStars === null) merged.lessonStars = {};
-  if (typeof merged.lessonAttempts !== 'object' || merged.lessonAttempts === null) merged.lessonAttempts = {};
+  if (!isObj(merged.lessonStars)) merged.lessonStars = {};
+  if (!isObj(merged.lessonAttempts)) merged.lessonAttempts = {};
+  if (typeof merged.xp !== 'number' || !Number.isFinite(merged.xp)) merged.xp = 0;
+  if (typeof merged.weeklyGoal !== 'number') merged.weeklyGoal = DEFAULT.weeklyGoal;
+  if (merged.placement !== null && !isObj(merged.placement)) merged.placement = null;
   return merged;
 }
 

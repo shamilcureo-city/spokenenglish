@@ -55,7 +55,12 @@ export function LessonScreen({
         lesson={lesson}
         recording={recording}
         drillScores={drillScores}
-        onRedo={() => setPhase('learn')}
+        onRedo={() => {
+          setDrillScores(undefined);
+          setTranscript([]);
+          setRecording(undefined);
+          setPhase('learn');
+        }}
         onDone={onNext}
       />
     );

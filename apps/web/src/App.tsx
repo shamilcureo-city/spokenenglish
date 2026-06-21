@@ -50,6 +50,7 @@ function Shell() {
       case 'lesson':
         return (
           <LessonScreen
+            key={modal.lesson.id}
             lesson={modal.lesson}
             onExit={close}
             onNext={() => {
