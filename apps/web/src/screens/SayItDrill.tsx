@@ -29,7 +29,8 @@ export function SayItDrill({
   coachName = 'Sunny',
 }: {
   phrases: string[];
-  onDone: () => void;
+  /** Called when the drill finishes; passes the per-phrase scores (for the recap). */
+  onDone: (results?: UtteranceScore[]) => void;
   coachName?: string;
 }) {
   const { recordMastery } = useStore();
@@ -83,7 +84,7 @@ export function SayItDrill({
     setFix(null);
     abort(); // never let a phrase-N session bleed into phrase N+1
     reset();
-    if (last) onDone();
+    if (last) onDone(Object.values(results));
     else setI(i + 1);
   }
 
@@ -98,7 +99,7 @@ export function SayItDrill({
               This browser can't do the say-it drill. You can still practise live with {coachName}.
             </p>
             <button
-              onClick={onDone}
+              onClick={() => onDone()}
               className="mt-5 rounded-full bg-gradient-to-r from-emerald-400 to-teal-300 px-7 py-3 text-sm font-bold text-black"
             >
               Continue →

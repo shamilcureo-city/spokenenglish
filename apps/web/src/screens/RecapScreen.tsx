@@ -11,19 +11,29 @@ import {
   type LessonScore,
   type Recap,
   type Turn,
+  type UtteranceScore,
+  type WordScore,
 } from '@fluentmap/core/conversation';
 import { getRecap } from '../lib/api';
 import { useStore, dateKey, shiftKey } from '../store';
 import { track } from '../lib/analytics';
 import { shareWin, renderWinCard, type Win } from '../lib/share';
+import { speak, ttsSupported } from '../lib/tts';
 import { Celebration } from './Celebration';
 import { DimensionBar, Page } from './ui';
+
+const WORD_COLOR: Record<WordScore['status'], string> = {
+  good: 'text-emerald-300',
+  close: 'text-amber-300',
+  missing: 'text-red-400',
+};
 
 export function RecapScreen({
   transcript,
   mode,
   lesson,
   recording,
+  drillScores,
   onDone,
   onRedo,
 }: {
@@ -31,6 +41,8 @@ export function RecapScreen({
   mode: ConversationMode;
   lesson?: Lesson;
   recording?: Blob;
+  /** Per-phrase traffic-light results from the lesson's say-it drill (if any). */
+  drillScores?: UtteranceScore[];
   onDone: () => void;
   onRedo?: () => void;
 }) {
@@ -260,8 +272,47 @@ export function RecapScreen({
         </div>
       )}
 
-      <h1 className="mb-1 text-xl font-bold">Here's how that went</h1>
+      <div className="mb-1 flex items-center justify-between gap-3">
+        <h1 className="text-xl font-bold">Here's how that went</h1>
+        {ttsSupported && (
+          <button
+            onClick={() => {
+              const parts = [recap.summary];
+              if (recap.fixes[0]) parts.push(`One thing to try: ${recap.fixes[0].better}.`);
+              if (recap.delivery) parts.push(recap.delivery);
+              speak(parts.join(' '));
+            }}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/[0.06] px-3 py-1.5 text-xs font-semibold text-white/75 hover:bg-white/[0.1]"
+          >
+            🔊 Hear {profile.name ? 'Sunny' : 'it'}
+          </button>
+        )}
+      </div>
       <p className="mb-5 text-sm leading-relaxed text-white/70">{recap.summary}</p>
+
+      {/* How each phrase landed in the say-it drill — the traffic-light replay */}
+      {drillScores && drillScores.length > 0 && (
+        <section className="mb-5">
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-white/40">
+            How your phrases landed
+          </h2>
+          <ul className="space-y-2">
+            {drillScores.map((s, i) => (
+              <li key={i} className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.03] px-3.5 py-2">
+                <span className="text-sm leading-snug">
+                  {s.words.map((w, j) => (
+                    <span key={j} className={WORD_COLOR[w.status]}>
+                      {w.word}
+                      {j < s.words.length - 1 ? ' ' : ''}
+                    </span>
+                  ))}
+                </span>
+                <span className="shrink-0 text-xs tabular-nums text-white/45">{s.intelligible}%</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {recap.wins.length > 0 && (
         <section className="mb-4 rounded-2xl border border-emerald-400/15 bg-emerald-400/[0.05] p-4">

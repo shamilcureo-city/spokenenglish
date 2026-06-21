@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Lesson, Turn } from '@fluentmap/core/conversation';
+import { nextLesson, type Lesson, type Turn } from '@fluentmap/core/conversation';
 import { StoreProvider, useStore } from './store';
 import { track } from './lib/analytics';
 import { Onboarding } from './screens/Onboarding';
@@ -27,7 +27,7 @@ type Modal =
   | { name: 'settings' };
 
 function Shell() {
-  const { onboarded } = useStore();
+  const { onboarded, completedLessonIds, placement } = useStore();
   const [tab, setTab] = useState<Tab>('today');
   const [modal, setModal] = useState<Modal | null>(null);
   const close = () => setModal(null);
@@ -48,7 +48,18 @@ function Shell() {
       case 'placement':
         return <PlacementScreen onDone={close} />;
       case 'lesson':
-        return <LessonScreen lesson={modal.lesson} onExit={close} onNext={close} />;
+        return (
+          <LessonScreen
+            lesson={modal.lesson}
+            onExit={close}
+            onNext={() => {
+              // Chain straight into the next lesson (it's already marked complete by now).
+              const nl = nextLesson(completedLessonIds, placement?.unitId);
+              if (nl && nl.id !== modal.lesson.id) setModal({ name: 'lesson', lesson: nl });
+              else close();
+            }}
+          />
+        );
       case 'drill':
         return <SayItDrill phrases={modal.phrases} onDone={close} />;
       case 'warmup':

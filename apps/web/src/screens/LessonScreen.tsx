@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Lesson, Turn } from '@fluentmap/core/conversation';
+import type { Lesson, Turn, UtteranceScore } from '@fluentmap/core/conversation';
 import { ConversationScreen } from './ConversationScreen';
 import { RecapScreen } from './RecapScreen';
 import { SayItDrill } from './SayItDrill';
@@ -18,9 +18,18 @@ export function LessonScreen({
   const [phase, setPhase] = useState<'learn' | 'drill' | 'speak' | 'feedback'>('learn');
   const [transcript, setTranscript] = useState<Turn[]>([]);
   const [recording, setRecording] = useState<Blob | undefined>();
+  const [drillScores, setDrillScores] = useState<UtteranceScore[] | undefined>();
 
   if (phase === 'drill') {
-    return <SayItDrill phrases={lesson.phrases} onDone={() => setPhase('speak')} />;
+    return (
+      <SayItDrill
+        phrases={lesson.phrases}
+        onDone={(scores) => {
+          setDrillScores(scores);
+          setPhase('speak');
+        }}
+      />
+    );
   }
 
   if (phase === 'speak') {
@@ -45,6 +54,7 @@ export function LessonScreen({
         mode="lesson"
         lesson={lesson}
         recording={recording}
+        drillScores={drillScores}
         onRedo={() => setPhase('learn')}
         onDone={onNext}
       />
