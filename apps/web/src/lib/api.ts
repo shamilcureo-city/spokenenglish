@@ -12,7 +12,15 @@ import type {
 } from '@fluentmap/core/conversation';
 
 const env = import.meta.env as Record<string, string | undefined>;
-export const FUNCTIONS_URL = env.VITE_FUNCTIONS_URL ?? 'http://localhost:8787';
+const isProd = Boolean(import.meta.env.PROD);
+// Dev → the local server; prod → a same-origin `/api` the host rewrites to the backend.
+// NEVER ship `localhost` — a prod build without VITE_FUNCTIONS_URL would hit the user's
+// own machine and silently fail.
+export const FUNCTIONS_URL = env.VITE_FUNCTIONS_URL ?? (isProd ? '/api' : 'http://localhost:8787');
+if (isProd && !env.VITE_FUNCTIONS_URL) {
+  // eslint-disable-next-line no-console
+  console.warn('[speakwell] VITE_FUNCTIONS_URL is unset — defaulting to /api. Point it at your backend.');
+}
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${FUNCTIONS_URL}${path}`, {

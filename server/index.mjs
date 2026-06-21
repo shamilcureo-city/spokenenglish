@@ -78,6 +78,64 @@ function loadGeminiKey() {
 
 const GEMINI_API_KEY = loadGeminiKey();
 
+// ── Deploy hardening (safe defaults for local; lock down via env in prod) ────
+// CORS: allow everything when ALLOWED_ORIGINS is unset (local dev); in prod set it
+// to a comma-separated allowlist e.g. "https://speakwell.app".
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+function corsOrigin(origin, cb) {
+  if (ALLOWED_ORIGINS.length === 0 || !origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+  cb(new Error('Origin not allowed'));
+}
+
+// In-memory per-IP rate limiter (single-process; swap for Redis when you scale).
+function rateLimit({ windowMs, max }) {
+  const hits = new Map(); // ip -> number[] (timestamps)
+  return (req, res, next) => {
+    const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+    const now = Date.now();
+    const recent = (hits.get(ip) || []).filter((t) => now - t < windowMs);
+    if (recent.length >= max) return res.status(429).json({ error: 'Too many requests — slow down.' });
+    recent.push(now);
+    hits.set(ip, recent);
+    next();
+  };
+}
+
+// Transcript input caps (prompt-injection / token-inflation guardrails).
+const MAX_TURNS = 80;
+const MAX_TURN_CHARS = 2000;
+function validTranscript(t) {
+  return (
+    Array.isArray(t) &&
+    t.length > 0 &&
+    t.length <= MAX_TURNS &&
+    t.every((x) => x && typeof x.text === 'string' && x.text.length <= MAX_TURN_CHARS)
+  );
+}
+
+// Ephemeral Gemini Live tokens (opt-in via GEMINI_EPHEMERAL=true). Keeps the raw key
+// off the client. VERIFY against your live Gemini project before enabling in prod —
+// the API shape can change; this fails CLOSED (never falls back to the raw key).
+const USE_EPHEMERAL = process.env.GEMINI_EPHEMERAL === 'true';
+async function mintEphemeralToken() {
+  const expire = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1alpha/auth_tokens?key=${GEMINI_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uses: 1, expireTime: expire, newSessionExpireTime: expire }),
+    },
+  );
+  if (!res.ok) throw new Error(`token mint failed (${res.status})`);
+  const data = await res.json();
+  const name = data.name || data.token || '';
+  return name.startsWith('auth_tokens/') ? name.slice('auth_tokens/'.length) : name;
+}
+
 // ── Gemini REST caller (same pure helpers as the core) ──────────────────────
 async function callGeminiJson(prompt, opts = {}) {
   if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not set on the dev server.');
@@ -97,8 +155,11 @@ function hexToken(bytes = 32) {
 }
 
 const app = express();
-app.use(cors());
-app.use(express.json({ limit: '2mb' }));
+app.set('trust proxy', 1); // so req.ip is the real client behind a host/proxy
+app.use(cors({ origin: corsOrigin }));
+app.use(express.json({ limit: '256kb' }));
+const sessionLimiter = rateLimit({ windowMs: 60_000, max: 20 });
+const scoreLimiter = rateLimit({ windowMs: 60_000, max: 30 });
 
 app.get('/', (_req, res) => {
   res.json({
@@ -109,11 +170,21 @@ app.get('/', (_req, res) => {
 });
 
 // POST /start-session → { token }
-app.post('/start-session', (_req, res) => {
-  if (!GEMINI_API_KEY) return res.status(500).json({ error: 'GEMINI_API_KEY is not set.' });
-  const token = hexToken();
-  tokens.set(token, { wsUrl: `${LIVE_WSS}?key=${GEMINI_API_KEY}`, createdAt: Date.now() });
-  res.json({ token });
+app.post('/start-session', sessionLimiter, async (_req, res) => {
+  if (!GEMINI_API_KEY) return res.status(500).json({ error: 'Server not configured.' });
+  const now = Date.now();
+  for (const [t, e] of tokens) if (now - e.createdAt > TTL_MS) tokens.delete(t); // sweep expired
+  try {
+    const wsUrl = USE_EPHEMERAL
+      ? `${LIVE_WSS}?access_token=${await mintEphemeralToken()}` // fails closed — never the raw key
+      : `${LIVE_WSS}?key=${GEMINI_API_KEY}`;
+    const token = hexToken();
+    tokens.set(token, { wsUrl, createdAt: Date.now() });
+    res.json({ token });
+  } catch (err) {
+    console.error('[start-session]', err.message);
+    res.status(502).json({ error: 'Could not start a session. Please try again.' });
+  }
 });
 
 // GET /redeem-session?token=... → { wsUrl }  (single-use, 30-min TTL)
@@ -127,11 +198,11 @@ app.get('/redeem-session', (req, res) => {
   res.json({ wsUrl: entry.wsUrl });
 });
 
-// POST /recap  { transcript, mode, supportLanguage, scene?, lesson? } → Recap
-app.post('/recap', async (req, res) => {
+// POST /recap  { transcript, mode, supportLanguage, lesson? } → Recap
+app.post('/recap', scoreLimiter, async (req, res) => {
   const { transcript, mode, supportLanguage, lesson } = req.body ?? {};
-  if (!Array.isArray(transcript) || transcript.length === 0) {
-    return res.status(400).json({ error: 'A valid transcript array is required.' });
+  if (!validTranscript(transcript)) {
+    return res.status(400).json({ error: 'A valid transcript is required.' });
   }
   try {
     const prompt = buildRecapPrompt({
@@ -143,15 +214,16 @@ app.post('/recap', async (req, res) => {
     const raw = await callGeminiJson(prompt, { temperature: RECAP_TEMPERATURE });
     res.json(parseRecap(raw));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[recap]', err.message); // keep upstream billing/quota details server-side
+    res.status(502).json({ error: 'Could not generate feedback right now.' });
   }
 });
 
 // POST /placement  { transcript, supportLanguage } → { levelId, unitId, summary }
-app.post('/placement', async (req, res) => {
+app.post('/placement', scoreLimiter, async (req, res) => {
   const { transcript, supportLanguage } = req.body ?? {};
-  if (!Array.isArray(transcript) || transcript.length === 0) {
-    return res.status(400).json({ error: 'A valid transcript array is required.' });
+  if (!validTranscript(transcript)) {
+    return res.status(400).json({ error: 'A valid transcript is required.' });
   }
   try {
     const prompt = buildPlacementPrompt({
@@ -161,7 +233,8 @@ app.post('/placement', async (req, res) => {
     const raw = await callGeminiJson(prompt, { temperature: 0.2 });
     res.json(parsePlacement(raw));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[placement]', err.message);
+    res.status(502).json({ error: 'Could not score that right now.' });
   }
 });
 
